@@ -1,0 +1,50 @@
+# ── Python ──────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ── Entornos virtuales ───────────────────────
+venv/
+env/
+.env
+.venv
+
+# ── Jupyter ──────────────────────────────────
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Outputs temporales ───────────────────────
+*.log
+*.tmp
+
+# ── Manuscrito (no versionar borradores Word) ─
+05_manuscrito/*.docx
+05_manuscrito/*.doc
+05_manuscrito/~$*
+
+# ── Sistema operativo ────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDEs ─────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ── Datos sensibles ──────────────────────────
+.env
+secrets.yaml
+
+# ── Archivos grandes de datos crudos ─────────
+# (se archivan en Zenodo, no en GitHub)
+# Descomenta si decides no versionar los datos crudos:
+# 01_datos_crudos/IML_2020/IML_2020.xls

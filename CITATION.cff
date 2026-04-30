@@ -1,0 +1,53 @@
+cff-version: 1.2.0
+message: "Si utilizas este código o datos, por favor cita usando los metadatos de este archivo."
+type: software
+title: "Índice de Vulnerabilidad Socioterritorial ante Inundaciones — Campeche, México"
+abstract: >
+  Código y datos procesados para la construcción de un índice compuesto de
+  vulnerabilidad ante inundaciones para los 13 municipios del estado de
+  Campeche, México, a partir del Censo 2020 (INEGI) y el Índice de
+  Marginación 2020 (CONAPO).
+authors:
+  - family-names: "Chin Canché"
+    given-names: "Guillermo Adrián"
+    orcid: "https://orcid.org/0000-XXXX-XXXX-XXXX"
+    affiliation: "Instituto Tecnológico Superior de Calkiní (ITESCAM), Tecnológico Nacional de México"
+    email: "contacto@guillermochin.com"
+  - family-names: "Pan Barcel"
+    given-names: "Javier"
+    orcid: "https://orcid.org/0000-XXXX-XXXX-XXXX"
+    affiliation: "Universidad Autónoma de Campeche — EPOMEX"
+  - family-names: "[Apellido Katia]"
+    given-names: "[Nombre Katia]"
+    orcid: "https://orcid.org/0000-XXXX-XXXX-XXXX"
+    affiliation: "[Institución Katia]"
+version: "1.0.0"
+date-released: "2026-07-05"
+license: "CC-BY-4.0"
+repository-code: "https://github.com/[usuario]/Proyecto_Vulnerabilidad_Inundaciones_Campeche"
+doi: "10.5281/zenodo.XXXXXXX"
+keywords:
+  - vulnerabilidad
+  - inundaciones
+  - Campeche
+  - riesgo de desastres
+  - índice compuesto
+  - ciencias atmosféricas
+  - gestión de riesgos
+  - Marco de Sendai
+  - datos abiertos
+  - México
+references:
+  - type: article
+    title: "Índice de Vulnerabilidad Socioterritorial ante Inundaciones en los municipios de Campeche, México"
+    authors:
+      - family-names: "Chin Canché"
+        given-names: "Guillermo Adrián"
+      - family-names: "Pan Barcel"
+        given-names: "Javier"
+      - family-names: "[Apellido Katia]"
+        given-names: "[Nombre Katia]"
+    journal: "Impluvium"
+    issue: 35
+    year: 2026
+    url: "https://www.agua.unam.mx/impluvium.html"
