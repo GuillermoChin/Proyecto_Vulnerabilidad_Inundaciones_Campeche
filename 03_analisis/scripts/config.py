@@ -64,7 +64,7 @@ VARIABLES_INDICE = {
     # --- Dimensión 2: Exposición Física (EF) ---
     "EF1": "POBTOT",      # Densidad de población (se calculará con área)
     "EF2": "VPH_C_ELEC",  # % viviendas sin electricidad (proxy precariedad)
-    "EF3": "PLOCRUG",     # % población en localidades rurales < 2500 hab
+    "EF3": "TAMLOC",    # Tamaño de localidad — reemplaza PLOCRUG
 }
 
 # Pesos de cada dimensión en el índice compuesto (deben sumar 1.0)
