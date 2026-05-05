@@ -191,7 +191,15 @@ def cargar_iter_localidades() -> pd.DataFrame:
     # Renombrar para compatibilidad con el resto del script
     df_merge = df_merge.rename(columns={"LON": "LONGITUD", "LAT": "LATITUD"})
 
-    print(f"  Localidades con coords válidas tras merge: {len(df_merge):,}")
+    # Convertir coordenadas a numérico explícitamente
+    df_merge["LONGITUD"] = pd.to_numeric(df_merge["LONGITUD"], errors="coerce")
+    df_merge["LATITUD"]  = pd.to_numeric(df_merge["LATITUD"],  errors="coerce")
+    # Eliminar filas con coordenadas inválidas tras conversión
+    df_merge = df_merge.dropna(subset=["LONGITUD", "LATITUD"])
+    # Corregir longitudes positivas
+    if len(df_merge) > 0 and df_merge["LONGITUD"].mean() > 0:
+        df_merge["LONGITUD"] = -df_merge["LONGITUD"]
+        print(f"  Localidades con coords válidas tras merge: {len(df_merge):,}")
     return df_merge
 
 
