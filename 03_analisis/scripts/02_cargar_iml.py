@@ -31,7 +31,7 @@ from config import (
 # ── Nombres de columnas esperados en el IML_2020.xls ─────────────────────────
 # CONAPO usa estos nombres — si cambian en futuras versiones ajustar aquí
 COL_ENTIDAD   = "ENT"         # Clave de entidad (2 dígitos, string)
-COL_MUNICIPIO = "CVE_MUN"     # Clave de municipio (3 dígitos, string)
+COL_MUNICIPIO = "MUN"         # Clave de municipio (3 dígitos, string)
 COL_NOM_MUN   = "NOM_MUN"     # Nombre del municipio
 COL_POBLACION = "POB_TOT"     # Población total de la localidad
 COL_IML       = "IM_2020"     # Índice de marginación de la localidad
