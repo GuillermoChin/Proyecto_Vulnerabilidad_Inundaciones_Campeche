@@ -299,126 +299,154 @@ def interpolar_idw(puntos_x: np.ndarray,
 def generar_mapa_interpolado(df: pd.DataFrame) -> None:
     """
     Genera el mapa de superficie continua interpolada.
-    Recorta la superficie al límite estatal de Campeche usando
-    el shapefile si geopandas está disponible.
+    Usa CRS consistente (WGS84 EPSG:4326) para todo.
     """
     try:
         import geopandas as gpd
-        from matplotlib.patches import PathPatch
-        from matplotlib.path import Path as MplPath
-        from shapely.ops import unary_union
         TIENE_GEO = True
     except ImportError:
-        print("  ⚠ geopandas no disponible — mapa sin recorte al límite estatal")
+        print("  ⚠ geopandas no disponible")
         TIENE_GEO = False
 
-    # ── Preparar puntos de datos ──────────────────────────────────────────────
+    # ── Preparar puntos ───────────────────────────────────────────────────────
     df_valido = df.dropna(subset=["LONGITUD", "LATITUD", "IVS_LOC"])
-    lons = df_valido["LONGITUD"].values
-    lats = df_valido["LATITUD"].values
-    ivs  = df_valido["IVS_LOC"].values
+    lons = df_valido["LONGITUD"].values.astype(float)
+    lats = df_valido["LATITUD"].values.astype(float)
+    ivs  = df_valido["IVS_LOC"].values.astype(float)
 
     print(f"  Puntos para interpolación: {len(lons):,}")
+    print(f"  Rango lon: [{lons.min():.3f} — {lons.max():.3f}]")
+    print(f"  Rango lat: [{lats.min():.3f} — {lats.max():.3f}]")
+    print(f"  Rango IVS: [{ivs.min():.3f} — {ivs.max():.3f}]")
 
-    # ── Crear grilla ──────────────────────────────────────────────────────────
-    lon_min, lon_max = lons.min() - 0.1, lons.max() + 0.1
-    lat_min, lat_max = lats.min() - 0.1, lats.max() + 0.1
+    # ── Cargar shapefile en WGS84 ─────────────────────────────────────────────
+    gdf     = None
+    gdf_mun = None
+    if TIENE_GEO and SHP_MUN.exists():
+        try:
+            gdf_mun = gpd.read_file(SHP_MUN)
+            # Reproyectar a WGS84 si es necesario
+            if gdf_mun.crs and gdf_mun.crs.to_epsg() != 4326:
+                gdf_mun = gdf_mun.to_crs(epsg=4326)
+            print(f"  Shapefile municipios CRS: {gdf_mun.crs}")
+        except Exception as e:
+            print(f"  ⚠ No se pudo cargar shapefile: {e}")
+
+    # ── Grilla en coordenadas geográficas (grados) ────────────────────────────
+    # Usar bbox del shapefile si está disponible, si no usar bbox de puntos
+    if gdf_mun is not None:
+        bbox    = gdf_mun.total_bounds  # [minx, miny, maxx, maxy]
+        lon_min = bbox[0] - 0.05
+        lat_min = bbox[1] - 0.05
+        lon_max = bbox[2] + 0.05
+        lat_max = bbox[3] + 0.05
+    else:
+        lon_min = lons.min() - 0.2
+        lat_min = lats.min() - 0.2
+        lon_max = lons.max() + 0.2
+        lat_max = lats.max() + 0.2
+
+    print(f"  BBox mapa: lon [{lon_min:.2f}–{lon_max:.2f}] "
+          f"lat [{lat_min:.2f}–{lat_max:.2f}]")
 
     grid_lon, grid_lat = np.meshgrid(
         np.linspace(lon_min, lon_max, GRID_RESOLUCION),
         np.linspace(lat_min, lat_max, GRID_RESOLUCION),
     )
 
-    print(f"  Grilla: {GRID_RESOLUCION}×{GRID_RESOLUCION} puntos")
-    print("  Interpolando con IDW (esto puede tardar ~30s)...")
+    print(f"  Interpolando IDW {GRID_RESOLUCION}×{GRID_RESOLUCION}...")
 
-    # ── IDW ──────────────────────────────────────────────────────────────────
+    # ── IDW con potencia baja para más contraste ──────────────────────────────
     grid_ivs = interpolar_idw(
         lons, lats, ivs,
         grid_lon, grid_lat,
-        potencia=IDW_POTENCIA,
-        vecinos=IDW_VECINOS,
+        potencia=1.5,    # Potencia baja = más contraste entre zonas
+        vecinos=12,      # Más vecinos = transiciones más suaves
     )
 
-    print(f"  Interpolación completada. "
-          f"Rango grilla: [{grid_ivs.min():.3f} — {grid_ivs.max():.3f}]")
+    # ── Usar rango real del IVS para la escala de color ───────────────────────
+    # Esto maximiza el contraste visual
+    vmin = ivs.min()
+    vmax = ivs.max()
+    print(f"  Escala de color: [{vmin:.3f} — {vmax:.3f}]")
 
     # ── Figura ────────────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(11, 10))
+    fig, ax = plt.subplots(figsize=(12, 11))
 
     # Superficie interpolada
     img = ax.pcolormesh(
         grid_lon, grid_lat, grid_ivs,
-        cmap="YlOrRd",
-        vmin=0, vmax=1,
-        shading="gouraud",   # Interpolación suave entre celdas
+        cmap="RdYlGn_r",    # Rojo=alto, verde=bajo — más contraste visual
+        vmin=vmin, vmax=vmax,
+        shading="gouraud",
         zorder=1,
     )
 
-    # Barra de color
-    cbar = plt.colorbar(img, ax=ax, shrink=0.65, pad=0.02, aspect=20)
+    # ── Límites municipales y estatal ─────────────────────────────────────────
+    if gdf_mun is not None:
+        # Contornos municipales
+        gdf_mun.boundary.plot(
+            ax=ax, linewidth=0.8,
+            edgecolor="white", alpha=0.7, zorder=2
+        )
+        # Contorno estatal más grueso
+        from shapely.ops import unary_union
+        estado_geom = unary_union(gdf_mun.geometry)
+        import geopandas as gpd2
+        gdf_estado = gpd2.GeoDataFrame(geometry=[estado_geom],
+                                        crs=gdf_mun.crs)
+        gdf_estado.boundary.plot(
+            ax=ax, linewidth=2.0,
+            edgecolor="black", zorder=3
+        )
+
+        # Etiquetas de acrónimos en centroides
+        ACRONIMOS_MAP = {
+            "Calkiní":     "CK", "Campeche":    "CA", "Carmen":    "CR",
+            "Champotón":   "CH", "Hecelchakán": "HE", "Hopelchén": "HO",
+            "Palizada":    "PA", "Tenabo":       "TE", "Escárcega": "ES",
+            "Calakmul":    "CL", "Candelaria":   "CN", "Seybaplaya":"SY",
+        }
+        col_nom = "NOMGEO" if "NOMGEO" in gdf_mun.columns else \
+                  "NOM_MUN" if "NOM_MUN" in gdf_mun.columns else None
+
+        if col_nom:
+            for _, row in gdf_mun.iterrows():
+                if row.geometry:
+                    c   = row.geometry.centroid
+                    nom = str(row[col_nom])
+                    acr = ACRONIMOS_MAP.get(nom, nom[:2].upper())
+                    ax.annotate(
+                        acr, xy=(c.x, c.y),
+                        ha="center", va="center",
+                        fontsize=11, color="white",
+                        fontweight="bold", zorder=5,
+                        bbox=dict(boxstyle="round,pad=0.15",
+                                  fc="black", alpha=0.35, ec="none")
+                    )
+
+    # ── Puntos de localidades ─────────────────────────────────────────────────
+    ax.scatter(lons, lats, c="black", s=3,
+               alpha=0.35, zorder=4, label="Localidades")
+
+    # ── Barra de color ────────────────────────────────────────────────────────
+    cbar = plt.colorbar(img, ax=ax, shrink=0.6, pad=0.02, aspect=20)
     cbar.set_label("Índice de Vulnerabilidad Socioterritorial (IVS)",
                    fontsize=FS_EJE)
     cbar.ax.tick_params(labelsize=FS_TICK)
 
-    # ── Límite estatal y municipal encima ─────────────────────────────────────
-    if TIENE_GEO and SHP_MUN.exists():
-        gdf = gpd.read_file(SHP_MUN)
+    # Agregar etiquetas de nivel en la barra
+    niveles_val = np.linspace(vmin, vmax, 5)
+    niveles_lbl = ["Menor\nvulnerabilidad", "", "Media", "",
+                   "Mayor\nvulnerabilidad"]
+    cbar.set_ticks(niveles_val)
+    cbar.set_ticklabels([f"{v:.2f}" for v in niveles_val])
 
-        # Contorno de municipios en blanco semitransparente
-        gdf.boundary.plot(ax=ax, linewidth=0.7,
-                          edgecolor="white", alpha=0.6, zorder=2)
-
-        # Contorno estatal en blanco sólido
-        estado = gdf.dissolve()
-        estado.boundary.plot(ax=ax, linewidth=1.8,
-                             edgecolor="white", zorder=3)
-
-        # Máscara fuera del estado (recorte visual)
-        try:
-            from shapely.ops import unary_union
-            poligono_estado = unary_union(gdf.geometry)
-            # Crear máscara blanca fuera del estado
-            from shapely.geometry import box
-            bbox = box(lon_min - 1, lat_min - 1,
-                       lon_max + 1, lat_max + 1)
-            mascara = bbox.difference(poligono_estado)
-            from descartes import PolygonPatch
-            patch = PolygonPatch(mascara, fc="white", ec="none",
-                                 alpha=1.0, zorder=4)
-            ax.add_patch(patch)
-        except Exception:
-            # Si descartes no está disponible, continuar sin máscara
-            print("  ℹ Instala 'descartes' para recorte preciso al límite estatal")
-            print("    pip install descartes")
-
-        # Etiquetas de municipios con acrónimos
-        ACRONIMOS_MAP = {
-            "Calkiní":     "CK", "Campeche":  "CA", "Carmen":   "CR",
-            "Champotón":   "CH", "Hecelchakán": "HE", "Hopelchén": "HO",
-            "Palizada":    "PA", "Tenabo":    "TE", "Escárcega": "ES",
-            "Calakmul":    "CL", "Candelaria": "CN", "Seybaplaya": "SY",
-        }
-        for _, row in gdf.iterrows():
-            if row.geometry:
-                c    = row.geometry.centroid
-                nom  = str(row.get("NOMGEO", row.get("NOM_MUN", "")))
-                acr  = ACRONIMOS_MAP.get(nom, nom[:2].upper())
-                ax.annotate(
-                    acr, xy=(c.x, c.y),
-                    ha="center", va="center",
-                    fontsize=10, color="white",
-                    fontweight="bold", zorder=5,
-                )
-
-    # Puntos de localidades como referencia (opcional, pequeños)
-    ax.scatter(lons, lats, c="black", s=1.5,
-               alpha=0.25, zorder=6, label="Localidades")
-
+    # ── Ejes y título ─────────────────────────────────────────────────────────
     ax.set_xlim(lon_min, lon_max)
     ax.set_ylim(lat_min, lat_max)
-    ax.set_xlabel("Longitud", fontsize=FS_EJE)
-    ax.set_ylabel("Latitud",  fontsize=FS_EJE)
+    ax.set_xlabel("Longitud (°)", fontsize=FS_EJE)
+    ax.set_ylabel("Latitud (°)",  fontsize=FS_EJE)
     ax.tick_params(labelsize=FS_TICK)
     ax.set_title(
         "Superficie continua de vulnerabilidad ante inundaciones\n"
@@ -432,8 +460,7 @@ def generar_mapa_interpolado(df: pd.DataFrame) -> None:
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
     print(f"  Guardado: {ruta.name}")
-
-
+    
 # =============================================================================
 # MAIN
 # =============================================================================
