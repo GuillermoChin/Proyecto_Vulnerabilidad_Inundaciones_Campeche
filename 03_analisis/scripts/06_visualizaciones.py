@@ -220,11 +220,7 @@ def fig01_ranking_ivs(df: pd.DataFrame) -> None:
                linewidth=0.9, label=f"Media = {df['IVS'].mean():.3f}")
     ax.tick_params(axis="both", labelsize=FS_TICK)
     ax.spines[["top", "right"]].set_visible(False)
-
-    fig.text(0.12, 0.01, NOTA_DZITBALCHE,
-             fontsize=9, color="#555555", style="italic")
-
-    plt.tight_layout(rect=[0, 0.05, 1, 1])
+    plt.tight_layout()
     ruta = DIR_FIGURAS / f"fig01_ranking_ivs.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
@@ -263,14 +259,7 @@ def fig02_dimensiones_barras(df: pd.DataFrame) -> None:
     ax.spines[["top", "right"]].set_visible(False)
 
     # Tabla de acrónimos al pie
-    tabla_acr = "  ".join(
-        [f"{row['ACR']}={row['NOM_MUN']}" for _, row in df_plot.iterrows()]
-    )
-    fig.text(0.05, 0.01,
-             f"Acrónimos: {tabla_acr}\n{NOTA_DZITBALCHE}",
-             fontsize=8.5, color="#555555", style="italic")
-
-    plt.tight_layout(rect=[0, 0.08, 1, 1])
+    plt.tight_layout()
     ruta = DIR_FIGURAS / f"fig02_dimensiones_barras.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
@@ -315,11 +304,7 @@ def fig03_heatmap_variables(df: pd.DataFrame) -> None:
     ax.text(n_vs + (len(cols_disp) - n_vs) / 2, -0.7, "Dim. EF",
             ha="center", fontsize=FS_EJE, color="#2980b9", fontweight="bold",
             transform=ax.get_xaxis_transform())
-
-    fig.text(0.05, 0.01, NOTA_DZITBALCHE,
-             fontsize=9, color="#555555", style="italic")
-
-    plt.tight_layout(rect=[0, 0.05, 1, 1])
+    plt.tight_layout()
     ruta = DIR_FIGURAS / f"fig03_heatmap_variables.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
@@ -387,15 +372,7 @@ def fig04_mapa_cloropletico(df: pd.DataFrame) -> None:
     ax.set_axis_off()
 
     # Tabla de acrónimos
-    df_ord  = df.sort_values("IVS", ascending=False)
-    tabla   = "  ".join(
-        [f"{r['ACR']}={r['NOM_MUN']}" for _, r in df_ord.iterrows()]
-    )
-    fig.text(0.05, 0.01,
-             f"Acrónimos: {tabla}\n{NOTA_DZITBALCHE}",
-             fontsize=8.5, color="#555555", style="italic", wrap=True)
-
-    plt.tight_layout(rect=[0, 0.07, 1, 1])
+    plt.tight_layout()
     ruta = DIR_MAPAS / f"fig04_mapa_cloropletico.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
@@ -438,14 +415,7 @@ def exp01_dispersion_vs_ef(df: pd.DataFrame) -> None:
     ax.spines[["top", "right"]].set_visible(False)
 
     # Tabla de acrónimos y nota
-    tabla = "  ".join(
-        [f"{r['ACR']}={r['NOM_MUN']}" for _, r in df.iterrows()]
-    )
-    fig.text(0.05, 0.01,
-             f"Acrónimos: {tabla}\n{NOTA_DZITBALCHE}",
-             fontsize=8.5, color="#555555", style="italic")
-
-    plt.tight_layout(rect=[0, 0.08, 1, 1])
+    plt.tight_layout()
     ruta = DIR_FIGURAS / f"exp01_dispersion_vs_ef.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
@@ -524,14 +494,7 @@ def exp03_correlacion_iml_ivs(df: pd.DataFrame) -> None:
     ax.legend(fontsize=FS_LEYENDA)
     ax.spines[["top", "right"]].set_visible(False)
 
-    tabla = "  ".join(
-        [f"{r['ACR']}={r['NOM_MUN']}" for _, r in df.iterrows()]
-    )
-    fig.text(0.05, 0.01,
-             f"Acrónimos: {tabla}\n{NOTA_DZITBALCHE}",
-             fontsize=8.5, color="#555555", style="italic")
-
-    plt.tight_layout(rect=[0, 0.08, 1, 1])
+    plt.tight_layout()
     ruta = DIR_FIGURAS / f"exp03_correlacion_iml_ivs.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
@@ -595,15 +558,7 @@ def exp04_radar_municipios(df: pd.DataFrame) -> None:
     )
 
     # Tabla de acrónimos y nota
-    nombres_sel = "  ".join(
-        [f"{r['ACR']}={r['NOM_MUN']} (IVS={r['IVS']:.3f})"
-         for _, r in df_sel.iterrows()]
-    )
-    fig.text(0.05, 0.01,
-             f"Municipios: {nombres_sel}\n{NOTA_DZITBALCHE}",
-             fontsize=8.5, color="#555555", style="italic")
-
-    plt.tight_layout(rect=[0, 0.06, 1, 1])
+    plt.tight_layout()
     ruta = DIR_FIGURAS / f"exp04_radar_municipios.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
