@@ -45,11 +45,30 @@ def cargar_iml(ruta_xls) -> pd.DataFrame:
     """
     print(f"  Cargando IML desde: {ruta_xls.name}")
     print("  (Archivo nacional ~130,000 filas, puede tardar unos segundos...)")
-    df = pd.read_excel(
-        ruta_xls,
-        sheet_name=0,       # Primera hoja
-        dtype=str,          # Todo como string para preservar ceros iniciales
-    )
+    # Intentar detectar automáticamente la fila del encabezado real
+    # CONAPO 2020 típicamente tiene entre 5 y 8 filas de metadata
+    for skiprows in range(0, 10):
+        df_test = pd.read_excel(
+            ruta_xls,
+            sheet_name=0,
+            dtype=str,
+            header=skiprows,
+            nrows=3,
+        )
+        if any("CVE" in str(c).upper() or "ENT" in str(c).upper()
+            for c in df_test.columns):
+                print(f"  Encabezado real encontrado en fila {skiprows}")
+                df = pd.read_excel(
+                ruta_xls,
+                sheet_name=0,
+                dtype=str,
+                header=skiprows,
+            )
+                break
+        else:
+        # Si no encontró automáticamente, prueba la hoja 1
+            print("  ⚠ Probando hoja 1 del archivo...")
+        df = pd.read_excel(ruta_xls, sheet_name=1, dtype=str)
     print(f"  Filas cargadas: {len(df):,} | Columnas: {len(df.columns)}")
     print(f"  Columnas disponibles: {list(df.columns)}")
     return df
