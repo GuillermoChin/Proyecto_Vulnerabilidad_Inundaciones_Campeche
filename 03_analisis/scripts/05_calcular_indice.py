@@ -4,7 +4,7 @@
 #           Municipios de Campeche, México
 # Autores:  Guillermo Adrián Chin Canché (ITESCAM)
 #           Javier Pan Barcel (UAC-EPOMEX)
-#           [Nombre] [Apellido Katia] ([Institución])
+#           Katia Ruiz Canul (ITESCAM)
 # Versión:  1.0.0
 # Fecha:    2026
 # -----------------------------------------------------------------------------

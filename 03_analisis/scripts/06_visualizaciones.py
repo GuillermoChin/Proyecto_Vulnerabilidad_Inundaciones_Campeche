@@ -4,7 +4,7 @@
 #           Municipios de Campeche, México
 # Autores:  Guillermo Adrián Chin Canché (ITESCAM)
 #           Javier Pan Barcel (UAC-EPOMEX)
-#           [Nombre] [Apellido Katia] ([Institución])
+#           Katia Ruiz Canul (ITESCAM)
 # Versión:  1.1.0
 # Fecha:    2026
 # -----------------------------------------------------------------------------
@@ -596,7 +596,7 @@ def generar_reporte(df: pd.DataFrame) -> None:
         f.write(f"  Generado: {ahora}\n")
         f.write(f"  Autores:  Guillermo Adrián Chin Canché (ITESCAM)\n")
         f.write(f"            Javier Pan Barcel (UAC-EPOMEX)\n")
-        f.write(f"            [Nombre Katia] [Apellido] ([Institución])\n")
+        f.write(f"            Katia Ruiz Canul (ITESCAM)\n")
         f.write(f"  Fuentes:  ITER Censo 2020 (INEGI) + IML 2020 (CONAPO)\n")
         linea()
 
