@@ -30,7 +30,7 @@ from config import (
 
 # ── Nombres de columnas esperados en el IML_2020.xls ─────────────────────────
 # CONAPO usa estos nombres — si cambian en futuras versiones ajustar aquí
-COL_ENTIDAD   = "CVE_ENT"     # Clave de entidad (2 dígitos, string)
+COL_ENTIDAD   = "ENT"         # Clave de entidad (2 dígitos, string)
 COL_MUNICIPIO = "CVE_MUN"     # Clave de municipio (3 dígitos, string)
 COL_NOM_MUN   = "NOM_MUN"     # Nombre del municipio
 COL_POBLACION = "POB_TOT"     # Población total de la localidad
@@ -41,38 +41,29 @@ COL_GRADO     = "GM_2020"     # Grado de marginación (Muy alto/Alto/Medio/Bajo/
 def cargar_iml(ruta_xls) -> pd.DataFrame:
     """
     Carga el archivo XLS del IML CONAPO 2020.
-    El archivo es nacional (~130,000 localidades) así que tarda unos segundos.
+    El archivo tiene 2 hojas de datos: IML_2020_AGS-MEX y IML_2020_MICH-ZAC
+    Se leen y concatenan ambas para tener el dataset nacional completo.
     """
     print(f"  Cargando IML desde: {ruta_xls.name}")
-    print("  (Archivo nacional ~130,000 filas, puede tardar unos segundos...)")
-    # Intentar detectar automáticamente la fila del encabezado real
-    # CONAPO 2020 típicamente tiene entre 5 y 8 filas de metadata
-    for skiprows in range(0, 10):
-        df_test = pd.read_excel(
+
+    hojas_datos = ["IML_2020_AGS-MEX", "IML_2020_MICH-ZAC"]
+    frames = []
+
+    for hoja in hojas_datos:
+        print(f"  Leyendo hoja: {hoja}...")
+        df_hoja = pd.read_excel(
             ruta_xls,
-            sheet_name=0,
+            sheet_name=hoja,
             dtype=str,
-            header=skiprows,
-            nrows=3,
+            header=0,
         )
-        if any("CVE" in str(c).upper() or "ENT" in str(c).upper()
-            for c in df_test.columns):
-                print(f"  Encabezado real encontrado en fila {skiprows}")
-                df = pd.read_excel(
-                ruta_xls,
-                sheet_name=0,
-                dtype=str,
-                header=skiprows,
-            )
-                break
-        else:
-        # Si no encontró automáticamente, prueba la hoja 1
-            print("  ⚠ Probando hoja 1 del archivo...")
-        df = pd.read_excel(ruta_xls, sheet_name=1, dtype=str)
-    print(f"  Filas cargadas: {len(df):,} | Columnas: {len(df.columns)}")
+        frames.append(df_hoja)
+        print(f"    {len(df_hoja):,} filas cargadas")
+
+    df = pd.concat(frames, ignore_index=True)
+    print(f"  Total filas concatenadas: {len(df):,} | Columnas: {len(df.columns)}")
     print(f"  Columnas disponibles: {list(df.columns)}")
     return df
-
 
 def filtrar_campeche(df: pd.DataFrame) -> pd.DataFrame:
     """
