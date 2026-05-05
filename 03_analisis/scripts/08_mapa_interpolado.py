@@ -100,7 +100,12 @@ def cargar_iter_localidades() -> pd.DataFrame:
                   "conjunto_de_datos" / "04sip.shp"
 
     print(f"  Cargando shapefile de localidades: {shp_loc.name}")
-    gdf = gpd.read_file(shp_loc, encoding="latin-1")
+    try:
+    # Intentar con fiona que sí acepta encoding
+        gdf = gpd.read_file(shp_loc, engine="fiona", encoding="latin-1")
+    except Exception:
+    # Fallback: pyogrio ignorando errores de encoding
+        gdf = gpd.read_file(shp_loc, encoding_errors="ignore")
 
     # Extraer coordenadas del centroide de cada localidad
     gdf["LON"] = gdf.geometry.centroid.x
