@@ -100,7 +100,7 @@ def cargar_iter_localidades() -> pd.DataFrame:
                   "conjunto_de_datos" / "04sip.shp"
 
     print(f"  Cargando shapefile de localidades: {shp_loc.name}")
-    gdf = gpd.read_file(shp_loc, encoding="utf-8")
+    gdf = gpd.read_file(shp_loc, encoding="latin-1")
 
     # Extraer coordenadas del centroide de cada localidad
     gdf["LON"] = gdf.geometry.centroid.x
