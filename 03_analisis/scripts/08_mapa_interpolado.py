@@ -50,9 +50,9 @@ from config import (
 )
 
 # ── Parámetros de interpolación ───────────────────────────────────────────────
-IDW_POTENCIA   = 3       # Potencia del IDW (2 es estándar)
-IDW_VECINOS    = 4       # Número de vecinos para el IDW
-GRID_RESOLUCION = 300    # Puntos por lado de la grilla (200×200)
+IDW_POTENCIA   = 2       # Potencia del IDW (2 es estándar)
+IDW_VECINOS    = 5       # Número de vecinos para el IDW
+GRID_RESOLUCION = 200    # Puntos por lado de la grilla (200×200)
 
 # ── Variables para IVS a nivel localidad ─────────────────────────────────────
 # Subconjunto de variables disponibles en el ITER a nivel localidad
@@ -331,6 +331,41 @@ def generar_mapa_interpolado(df: pd.DataFrame) -> None:
 
     # Polígono del estado completo (unión de municipios)
     poligono_estado = unary_union(gdf_mun.geometry)
+    # ── Intersectar con tierra firme (excluye automáticamente cuerpos de agua) ─
+    # En lugar de restar agua, usamos el polígono de tierra de Natural Earth.
+    # Esto excluye automáticamente Laguna de Términos, mar y cualquier
+    # cuerpo de agua costero o interior.
+    dir_agua  = ITER_CSV.parents[3] / "01_datos_crudos" / "natural_earth_agua"
+    shp_land  = dir_agua / "ne_10m_land.shp"
+
+    if shp_land.exists():
+        try:
+            print("  Cargando polígono de tierra Natural Earth...")
+            gdf_land = gpd.read_file(shp_land)
+            if gdf_land.crs.to_epsg() != 4326:
+                gdf_land = gdf_land.to_crs(epsg=4326)
+
+            # Recortar tierra al bbox de Campeche + margen
+            from shapely.geometry import box
+            bbox_camp = box(
+                gdf_mun.total_bounds[0] - 0.5,
+                gdf_mun.total_bounds[1] - 0.5,
+                gdf_mun.total_bounds[2] + 0.5,
+                gdf_mun.total_bounds[3] + 0.5,
+            )
+            land_camp = gdf_land[gdf_land.intersects(bbox_camp)]
+            tierra_union = unary_union(land_camp.geometry)
+
+            # Intersección: tierra ∩ estado = solo tierra dentro de Campeche
+            poligono_estado = poligono_estado.intersection(tierra_union)
+            print("  Laguna de Términos y cuerpos de agua excluidos ✓")
+        except Exception as e:
+            print(f"  ⚠ Error con ne_10m_land: {e}")
+            print("  Continuando con polígono estatal sin corrección de agua")
+    else:
+        print(f"  ⚠ ne_10m_land.shp no encontrado en {dir_agua}")
+        print("  Ejecuta descargar_datos_agua.py primero")
+    
     bbox = gdf_mun.total_bounds  # [minx, miny, maxx, maxy]
 
     lon_min, lat_min = bbox[0] - 0.05, bbox[1] - 0.05
