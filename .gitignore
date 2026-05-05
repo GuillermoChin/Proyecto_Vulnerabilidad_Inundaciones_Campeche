@@ -45,6 +45,13 @@ desktop.ini
 secrets.yaml
 
 # ── Archivos grandes de datos crudos ─────────
-# (se archivan en Zenodo, no en GitHub)
-# Descomenta si decides no versionar los datos crudos:
-# 01_datos_crudos/IML_2020/IML_2020.xls
+# ── Datos crudos, procesados y outputs (se archivan en Zenodo) ───────────
+# Los datos NO se versionan en GitHub — solo el código
+01_datos_crudos/
+02_datos_procesados/
+04_outputs/
+
+# Excepción: mantener estructura de carpetas con .gitkeep
+!01_datos_crudos/**/.gitkeep
+!02_datos_procesados/.gitkeep
+!04_outputs/**/.gitkeep
