@@ -54,9 +54,11 @@ def cargar_iter(ruta_csv: str) -> pd.DataFrame:
     df = pd.read_csv(
         ruta_csv,
         encoding="latin-1",
+        encoding_errors="replace",
         dtype=str,          # Todo como string para evitar pérdida de ceros
         low_memory=False,
     )
+    df.columns = [c.replace("ï»¿", "").strip() for c in df.columns]
     print(f"  Filas cargadas: {len(df):,} | Columnas: {len(df.columns)}")
     return df
 
@@ -67,7 +69,9 @@ def filtrar_municipios(df: pd.DataFrame) -> pd.DataFrame:
       - MUN distinto de '000' (no es total estatal)
       - LOC igual a '0000'    (es total del municipio, no localidad específica)
     """
-    mascara = (df["MUN"] != "000") & (df["LOC"] == "0000")
+    mascara = (df["MUN"] != "000") & (df["LOC"].isin(["0000", "000"]))
+    # Excluir la fila de total estatal (NOM_MUN vacío o igual al estado)
+    mascara = mascara & (df["MUN"].str.strip() != "000")
     df_mun = df[mascara].copy()
     print(f"  Municipios encontrados: {len(df_mun)}")
     return df_mun
