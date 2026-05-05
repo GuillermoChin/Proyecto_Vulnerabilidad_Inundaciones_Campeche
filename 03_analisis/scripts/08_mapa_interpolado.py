@@ -50,9 +50,9 @@ from config import (
 )
 
 # ── Parámetros de interpolación ───────────────────────────────────────────────
-IDW_POTENCIA   = 2       # Potencia del IDW (2 es estándar)
-IDW_VECINOS    = 8       # Número de vecinos para el IDW
-GRID_RESOLUCION = 200    # Puntos por lado de la grilla (200×200)
+IDW_POTENCIA   = 3       # Potencia del IDW (2 es estándar)
+IDW_VECINOS    = 4       # Número de vecinos para el IDW
+GRID_RESOLUCION = 300    # Puntos por lado de la grilla (200×200)
 
 # ── Variables para IVS a nivel localidad ─────────────────────────────────────
 # Subconjunto de variables disponibles en el ITER a nivel localidad
@@ -358,30 +358,35 @@ def generar_mapa_interpolado(df: pd.DataFrame) -> None:
 
     # ── IDW con potencia baja para más contraste ──────────────────────────────
     grid_ivs = interpolar_idw(
-        lons, lats, ivs,
-        grid_lon, grid_lat,
-        potencia=1.5,    # Potencia baja = más contraste entre zonas
-        vecinos=12,      # Más vecinos = transiciones más suaves
-    )
-
-    # ── Usar rango real del IVS para la escala de color ───────────────────────
-    # Esto maximiza el contraste visual
-    vmin = ivs.min()
-    vmax = ivs.max()
-    print(f"  Escala de color: [{vmin:.3f} — {vmax:.3f}]")
+    lons, lats, ivs,
+    grid_lon, grid_lat,
+    potencia=IDW_POTENCIA,
+    vecinos=IDW_VECINOS,
+)
+    # ── Normalización por percentiles para máximo contraste visual ────────────
+    # Usar p5–p95 en lugar de min–max evita que outliers aplasten el rango
+    vmin = np.percentile(grid_ivs, 5)
+    vmax = np.percentile(grid_ivs, 95)
+    print(f"  Escala de color p5–p95: [{vmin:.3f} — {vmax:.3f}]")
+    print(f"  Rango real grilla:      [{grid_ivs.min():.3f} — {grid_ivs.max():.3f}]")
 
     # ── Figura ────────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(12, 11))
 
-    # Superficie interpolada
+    from matplotlib.colors import PowerNorm
+    import matplotlib.colors as mcolors
+
+    # PowerNorm gamma<1 estira los valores bajos, gamma>1 estira los altos
+    # Con gamma=0.5 los valores medios-altos se ven más distintos
+    norma = PowerNorm(gamma=0.6, vmin=vmin, vmax=vmax)
+
     img = ax.pcolormesh(
         grid_lon, grid_lat, grid_ivs,
-        cmap="RdYlGn_r",    # Rojo=alto, verde=bajo — más contraste visual
-        vmin=vmin, vmax=vmax,
+        cmap="RdYlGn_r",
+        norm=norma,
         shading="gouraud",
         zorder=1,
-    )
-
+)
     # ── Límites municipales y estatal ─────────────────────────────────────────
     if gdf_mun is not None:
         # Contornos municipales
@@ -432,15 +437,11 @@ def generar_mapa_interpolado(df: pd.DataFrame) -> None:
     # ── Barra de color ────────────────────────────────────────────────────────
     cbar = plt.colorbar(img, ax=ax, shrink=0.6, pad=0.02, aspect=20)
     cbar.set_label("Índice de Vulnerabilidad Socioterritorial (IVS)",
-                   fontsize=FS_EJE)
+               fontsize=FS_EJE)
     cbar.ax.tick_params(labelsize=FS_TICK)
-
-    # Agregar etiquetas de nivel en la barra
     niveles_val = np.linspace(vmin, vmax, 5)
-    niveles_lbl = ["Menor\nvulnerabilidad", "", "Media", "",
-                   "Mayor\nvulnerabilidad"]
     cbar.set_ticks(niveles_val)
-    cbar.set_ticklabels([f"{v:.2f}" for v in niveles_val])
+    cbar.set_ticklabels([f"{v:.3f}" for v in niveles_val])
 
     # ── Ejes y título ─────────────────────────────────────────────────────────
     ax.set_xlim(lon_min, lon_max)
