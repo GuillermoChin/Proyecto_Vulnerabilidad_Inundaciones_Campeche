@@ -100,10 +100,20 @@ def cargar_iter_localidades() -> pd.DataFrame:
         gdf = gpd.read_file(shp_loc)
 
     print(f"  Columnas shapefile: {list(gdf.columns)}")
+    print(f"  CRS original: {gdf.crs}")
 
-    # Extraer coordenadas decimales del centroide
+    # Reproyectar a WGS84 ANTES de extraer centroides
+    # El shapefile viene en Lambert Conformal Conic (metros)
+    if gdf.crs and gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs(epsg=4326)
+        print(f"  Reproyectado a WGS84 ✓")
+
+    # Extraer coordenadas decimales del centroide (ya en grados)
     gdf["_LON"] = gdf.geometry.centroid.x
     gdf["_LAT"] = gdf.geometry.centroid.y
+
+    print(f"  Rango LON: [{gdf['_LON'].min():.4f} — {gdf['_LON'].max():.4f}]")
+    print(f"  Rango LAT: [{gdf['_LAT'].min():.4f} — {gdf['_LAT'].max():.4f}]")
 
     # Corregir longitudes positivas
     if gdf["_LON"].mean() > 0:
