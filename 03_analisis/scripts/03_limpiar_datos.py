@@ -59,7 +59,7 @@ def estandarizar_claves(df_iter: pd.DataFrame,
     con ceros a la izquierda (ej: '001', '011') para que el merge funcione.
     """
     df_iter["CVE_MUN"] = df_iter["MUN"].str.zfill(3)
-    df_iml["CVE_MUN"]  = df_iml["CVE_MUN"].str.zfill(3)
+    df_iml["CVE_MUN"]  = df_iml["MUN"].str.zfill(3)
     print("  Claves municipales estandarizadas ✓")
     return df_iter, df_iml
 
