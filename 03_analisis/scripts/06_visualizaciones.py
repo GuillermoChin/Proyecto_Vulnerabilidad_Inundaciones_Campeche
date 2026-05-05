@@ -85,7 +85,7 @@ ETIQUETAS_VARS = {
     "NORM_VS5": "Sin salud",
     "NORM_EF1": "Densidad pob.",
     "NORM_EF2": "Sin electricidad",
-    "NORM_EF3": "Pob. rural",
+    "NORM_EF3": "Sin bienes",
 }
 
 

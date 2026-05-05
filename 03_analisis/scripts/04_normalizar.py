@@ -40,7 +40,7 @@ VARS_NORMALIZACION = {
     "VS5": "PROP_PSINDER",
     "EF1": "POBTOT",          # Se normaliza directamente (densidad relativa)
     "EF2": "PROP_VPH_C_ELEC",
-    "EF3": "PROP_PLOCRUG",
+    "EF3": "PROP_VPH_SNBIEN",
 }
 
 
