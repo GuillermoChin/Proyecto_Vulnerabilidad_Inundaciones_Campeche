@@ -137,16 +137,21 @@ COLORES_VARS = [
 
 def corregir_nombres(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Corrige los nombres de municipios con problemas de encoding.
-    Aplica el diccionario NOMBRES_CORRECTOS a la columna NOM_MUN.
+    Corrige nombres de municipios con problemas de encoding.
+    Solo aplica el diccionario de reemplazos — no intenta re-encodear
+    porque el CSV ya fue guardado con los bytes tal como están.
     """
     df = df.copy()
     df["NOM_MUN"] = df["NOM_MUN"].replace(NOMBRES_CORRECTOS)
-    # Limpieza adicional de caracteres residuales
-    df["NOM_MUN"] = df["NOM_MUN"].apply(
-        lambda x: x.encode("latin-1").decode("utf-8")
-        if isinstance(x, str) else x
-    )
+    # Corrección adicional byte a byte para residuos latin-1
+    def limpiar(nombre):
+        if not isinstance(nombre, str):
+            return nombre
+        try:
+            return nombre.encode("raw_unicode_escape").decode("latin-1")
+        except Exception:
+            return nombre
+    df["NOM_MUN"] = df["NOM_MUN"].apply(limpiar)
     return df
 
 
