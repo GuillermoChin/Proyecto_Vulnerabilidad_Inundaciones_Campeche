@@ -171,6 +171,12 @@ def cargar_iter_localidades() -> pd.DataFrame:
     print(f"  Ejemplo clave ITER: {df['CVE_LOC_KEY'].iloc[0]}")
 
     # ── 3. Merge ──────────────────────────────────────────────────────────────
+    # Eliminar columnas LONGITUD/LATITUD del ITER (vienen en DMS, no sirven)
+    # Usamos las coordenadas decimales del shapefile (LON, LAT)
+    cols_drop = [c for c in df.columns
+                if c in ["LONGITUD", "LATITUD", "ALTITUD"]]
+    df = df.drop(columns=cols_drop)
+
     df_merge = df.merge(
         gdf[["CVE_LOC_KEY", "LON", "LAT"]],
         on="CVE_LOC_KEY",
@@ -191,15 +197,14 @@ def cargar_iter_localidades() -> pd.DataFrame:
     # Renombrar para compatibilidad con el resto del script
     df_merge = df_merge.rename(columns={"LON": "LONGITUD", "LAT": "LATITUD"})
 
-    # Convertir coordenadas a numérico explícitamente
-    df_merge["LONGITUD"] = pd.to_numeric(df_merge["LONGITUD"], errors="coerce")
-    df_merge["LATITUD"]  = pd.to_numeric(df_merge["LATITUD"],  errors="coerce")
-    # Eliminar filas con coordenadas inválidas tras conversión
-    df_merge = df_merge.dropna(subset=["LONGITUD", "LATITUD"])
-    # Corregir longitudes positivas
-    if len(df_merge) > 0 and df_merge["LONGITUD"].mean() > 0:
-        df_merge["LONGITUD"] = -df_merge["LONGITUD"]
-        print(f"  Localidades con coords válidas tras merge: {len(df_merge):,}")
+    # LON y LAT ya vienen en decimal desde el shapefile
+    df_merge = df_merge.dropna(subset=["LON", "LAT"])
+    # Corregir longitudes positivas si es necesario
+    if len(df_merge) > 0 and df_merge["LON"].mean() > 0:
+        df_merge["LON"] = -df_merge["LON"]
+    # Renombrar para compatibilidad con el resto del script
+    df_merge = df_merge.rename(columns={"LON": "LONGITUD", "LAT": "LATITUD"})
+    print(f"  Localidades con coords válidas tras merge: {len(df_merge):,}")
     return df_merge
 
 
