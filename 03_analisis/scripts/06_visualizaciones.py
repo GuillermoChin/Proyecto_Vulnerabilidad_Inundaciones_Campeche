@@ -60,8 +60,6 @@ from config import (
     PALETA_COLORES,
     NIVELES_INDICE,
     PESOS_DIMENSIONES,
-    VARS_NORMALIZACION if hasattr(__import__('config'), 'VARS_NORMALIZACION')
-    else None,
 )
 
 # ── Paleta de colores por nivel de vulnerabilidad ─────────────────────────────
