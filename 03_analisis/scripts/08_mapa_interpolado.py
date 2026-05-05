@@ -76,14 +76,10 @@ FS_TICK   = 11
 
 def cargar_iter_localidades() -> pd.DataFrame:
     """
-    Carga el ITER y obtiene coordenadas desde el shapefile de localidades
-    04l.shp (Marco Geoestadístico INEGI), ya que el CSV trae las coordenadas
-    en formato grados°minutos'segundos que pandas no puede leer directamente.
-
-    Proceso:
-        1. Cargar shapefile 04l.shp → coordenadas decimales + CVE_LOC
-        2. Cargar ITER CSV → variables socioeconómicas + CVE_LOC
-        3. Merge por CVE_LOC
+    Carga localidades combinando:
+    - Coordenadas decimales del shapefile 04l.shp
+    - Variables socioeconómicas del ITER CSV
+    Merge por clave CVEGEO de 9 dígitos.
     """
     try:
         import geopandas as gpd
@@ -93,52 +89,35 @@ def cargar_iter_localidades() -> pd.DataFrame:
     # ── 1. Shapefile de localidades ───────────────────────────────────────────
     shp_loc = ITER_CSV.parents[2] / "04_campeche" / \
               "conjunto_de_datos" / "04l.shp"
-
     if not shp_loc.exists():
-        # Intentar con 04sip.shp como alternativa
         shp_loc = ITER_CSV.parents[2] / "04_campeche" / \
                   "conjunto_de_datos" / "04sip.shp"
 
     print(f"  Cargando shapefile de localidades: {shp_loc.name}")
     try:
-    # Intentar con fiona que sí acepta encoding
         gdf = gpd.read_file(shp_loc, engine="fiona", encoding="latin-1")
     except Exception:
-    # Fallback: pyogrio ignorando errores de encoding
-        gdf = gpd.read_file(shp_loc, encoding_errors="ignore")
+        gdf = gpd.read_file(shp_loc)
 
-    # Extraer coordenadas del centroide de cada localidad
-    gdf["LON"] = gdf.geometry.centroid.x
-    gdf["LAT"] = gdf.geometry.centroid.y
-
-    # Construir clave de localidad para el merge
-    # El shapefile usa CVEGEO o combinación CVE_ENT+CVE_MUN+CVE_LOC
     print(f"  Columnas shapefile: {list(gdf.columns)}")
 
-    if "CVEGEO" in gdf.columns:
-        gdf["CVE_LOC_KEY"] = gdf["CVEGEO"].astype(str).str.zfill(9)
-    elif all(c in gdf.columns for c in ["CVE_ENT", "CVE_MUN", "CVE_LOC"]):
-        gdf["CVE_LOC_KEY"] = (
-            gdf["CVE_ENT"].astype(str).str.zfill(2) +
-            gdf["CVE_MUN"].astype(str).str.zfill(3) +
-            gdf["CVE_LOC"].astype(str).str.zfill(4)
-        )
-    else:
-        # Usar primera columna que parezca clave
-        col_clave = [c for c in gdf.columns
-                     if "CVE" in c.upper() or "CLAVE" in c.upper()]
-        if col_clave:
-            gdf["CVE_LOC_KEY"] = gdf[col_clave[0]].astype(str)
-        else:
-            raise KeyError(
-                f"No se encontró columna de clave en shapefile. "
-                f"Columnas: {list(gdf.columns)}"
-            )
+    # Extraer coordenadas decimales del centroide
+    gdf["_LON"] = gdf.geometry.centroid.x
+    gdf["_LAT"] = gdf.geometry.centroid.y
 
-    print(f"  Localidades en shapefile: {len(gdf):,}")
-    print(f"  Ejemplo clave: {gdf['CVE_LOC_KEY'].iloc[0]}")
+    # Corregir longitudes positivas
+    if gdf["_LON"].mean() > 0:
+        gdf["_LON"] = -gdf["_LON"]
 
-    # ── 2. ITER CSV — solo localidades ────────────────────────────────────────
+    # Clave de 9 dígitos
+    gdf["_CLAVE"] = gdf["CVEGEO"].astype(str).str.zfill(9)
+
+    # Solo quedarnos con lo que necesitamos del shapefile
+    gdf_coords = gdf[["_CLAVE", "_LON", "_LAT"]].copy()
+    print(f"  Localidades en shapefile: {len(gdf_coords):,}")
+    print(f"  Ejemplo clave shapefile: {gdf_coords['_CLAVE'].iloc[0]}")
+
+    # ── 2. ITER CSV ───────────────────────────────────────────────────────────
     print(f"  Cargando ITER: {ITER_CSV.name}")
     df = pd.read_csv(
         ITER_CSV,
@@ -148,65 +127,50 @@ def cargar_iter_localidades() -> pd.DataFrame:
     )
     df.columns = [c.replace("ï»¿", "").strip() for c in df.columns]
 
-    # Filtrar solo localidades (no totales)
+    # Filtrar solo localidades
     df = df[
         (df["MUN"] != "000") &
         (~df["LOC"].isin(["0000", "000"]))
     ].copy()
 
-    # Construir clave de localidad compatible
-    df["CVE_LOC_KEY"] = (
-        df["ENTIDAD"].astype(str).str.zfill(2) +
+    # Eliminar columnas de coordenadas DMS del ITER (no son útiles)
+    df = df.drop(columns=[c for c in ["LONGITUD", "LATITUD", "ALTITUD"]
+                           if c in df.columns])
+
+    # Construir clave de 9 dígitos
+    ent = "04"  # Campeche
+    df["_CLAVE"] = (
+        ent +
         df["MUN"].astype(str).str.zfill(3) +
         df["LOC"].astype(str).str.zfill(4)
     )
 
-    # Si ENTIDAD tiene BOM usar clave_entidad directamente
-    if "ENTIDAD" not in df.columns:
-        df["CVE_LOC_KEY"] = "04" + \
-            df["MUN"].astype(str).str.zfill(3) + \
-            df["LOC"].astype(str).str.zfill(4)
-
     print(f"  Localidades en ITER: {len(df):,}")
-    print(f"  Ejemplo clave ITER: {df['CVE_LOC_KEY'].iloc[0]}")
+    print(f"  Ejemplo clave ITER: {df['_CLAVE'].iloc[0]}")
 
     # ── 3. Merge ──────────────────────────────────────────────────────────────
-    # Eliminar columnas LONGITUD/LATITUD del ITER (vienen en DMS, no sirven)
-    # Usamos las coordenadas decimales del shapefile (LON, LAT)
-    cols_drop = [c for c in df.columns
-                if c in ["LONGITUD", "LATITUD", "ALTITUD"]]
-    df = df.drop(columns=cols_drop)
+    df_merge = df.merge(gdf_coords, on="_CLAVE", how="inner")
 
-    df_merge = df.merge(
-        gdf[["CVE_LOC_KEY", "LON", "LAT"]],
-        on="CVE_LOC_KEY",
-        how="inner",
-    )
+    print(f"  Localidades tras merge: {len(df_merge):,}")
 
     # Convertir variables numéricas
     for col in ["POBTOT", "TVIVHAB"]:
-        df_merge[col] = pd.to_numeric(df_merge[col], errors="coerce")
+        if col in df_merge.columns:
+            df_merge[col] = pd.to_numeric(df_merge[col], errors="coerce")
 
-    # Filtrar población > 0
-    df_merge = df_merge[df_merge["POBTOT"] > 0].copy()
+    # Filtrar población > 0 y coords válidas
+    df_merge = df_merge[
+        df_merge["POBTOT"].notna() &
+        (df_merge["POBTOT"] > 0) &
+        df_merge["_LON"].notna() &
+        df_merge["_LAT"].notna()
+    ].copy()
 
-    # Corregir longitudes si son positivas
-    if df_merge["LON"].mean() > 0:
-        df_merge["LON"] = -df_merge["LON"]
+    # Renombrar coordenadas para el resto del script
+    df_merge = df_merge.rename(columns={"_LON": "LONGITUD", "_LAT": "LATITUD"})
 
-    # Renombrar para compatibilidad con el resto del script
-    df_merge = df_merge.rename(columns={"LON": "LONGITUD", "LAT": "LATITUD"})
-
-    # LON y LAT ya vienen en decimal desde el shapefile
-    df_merge = df_merge.dropna(subset=["LON", "LAT"])
-    # Corregir longitudes positivas si es necesario
-    if len(df_merge) > 0 and df_merge["LON"].mean() > 0:
-        df_merge["LON"] = -df_merge["LON"]
-    # Renombrar para compatibilidad con el resto del script
-    df_merge = df_merge.rename(columns={"LON": "LONGITUD", "LAT": "LATITUD"})
-    print(f"  Localidades con coords válidas tras merge: {len(df_merge):,}")
+    print(f"  Localidades válidas finales: {len(df_merge):,}")
     return df_merge
-
 
 def calcular_ivs_localidad(df: pd.DataFrame) -> pd.DataFrame:
     """
