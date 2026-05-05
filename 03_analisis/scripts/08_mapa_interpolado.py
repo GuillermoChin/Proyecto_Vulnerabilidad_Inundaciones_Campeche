@@ -298,152 +298,142 @@ def interpolar_idw(puntos_x: np.ndarray,
 
 def generar_mapa_interpolado(df: pd.DataFrame) -> None:
     """
-    Genera el mapa de superficie continua interpolada.
-    Usa CRS consistente (WGS84 EPSG:4326) para todo.
+    Genera mapa interpolado IDW recortado al límite estatal de Campeche.
+    Los puntos fuera del polígono estatal se enmascaran con NaN.
     """
-    try:
-        import geopandas as gpd
-        TIENE_GEO = True
-    except ImportError:
-        print("  ⚠ geopandas no disponible")
-        TIENE_GEO = False
+    import geopandas as gpd
+    from shapely.ops import unary_union
+    from shapely.geometry import Point
+    import numpy as np
 
-    # ── Preparar puntos ───────────────────────────────────────────────────────
+    # ── Puntos de datos ───────────────────────────────────────────────────────
     df_valido = df.dropna(subset=["LONGITUD", "LATITUD", "IVS_LOC"])
     lons = df_valido["LONGITUD"].values.astype(float)
     lats = df_valido["LATITUD"].values.astype(float)
     ivs  = df_valido["IVS_LOC"].values.astype(float)
 
-    print(f"  Puntos para interpolación: {len(lons):,}")
-    print(f"  Rango lon: [{lons.min():.3f} — {lons.max():.3f}]")
-    print(f"  Rango lat: [{lats.min():.3f} — {lats.max():.3f}]")
-    print(f"  Rango IVS: [{ivs.min():.3f} — {ivs.max():.3f}]")
+    print(f"  Puntos: {len(lons):,} | IVS [{ivs.min():.3f}–{ivs.max():.3f}]")
 
-    # ── Cargar shapefile en WGS84 ─────────────────────────────────────────────
-    gdf     = None
-    gdf_mun = None
-    if TIENE_GEO and SHP_MUN.exists():
-        try:
-            gdf_mun = gpd.read_file(SHP_MUN)
-            # Reproyectar a WGS84 si es necesario
-            if gdf_mun.crs and gdf_mun.crs.to_epsg() != 4326:
-                gdf_mun = gdf_mun.to_crs(epsg=4326)
-            print(f"  Shapefile municipios CRS: {gdf_mun.crs}")
-        except Exception as e:
-            print(f"  ⚠ No se pudo cargar shapefile: {e}")
+    # ── Cargar shapefile y reproyectar a WGS84 ────────────────────────────────
+    gdf_mun = gpd.read_file(SHP_MUN)
+    if gdf_mun.crs and gdf_mun.crs.to_epsg() != 4326:
+        gdf_mun = gdf_mun.to_crs(epsg=4326)
 
-    # ── Grilla en coordenadas geográficas (grados) ────────────────────────────
-    # Usar bbox del shapefile si está disponible, si no usar bbox de puntos
-    if gdf_mun is not None:
-        bbox    = gdf_mun.total_bounds  # [minx, miny, maxx, maxy]
-        lon_min = bbox[0] - 0.05
-        lat_min = bbox[1] - 0.05
-        lon_max = bbox[2] + 0.05
-        lat_max = bbox[3] + 0.05
-    else:
-        lon_min = lons.min() - 0.2
-        lat_min = lats.min() - 0.2
-        lon_max = lons.max() + 0.2
-        lat_max = lats.max() + 0.2
+    # Polígono del estado completo (unión de municipios)
+    poligono_estado = unary_union(gdf_mun.geometry)
+    bbox = gdf_mun.total_bounds  # [minx, miny, maxx, maxy]
 
-    print(f"  BBox mapa: lon [{lon_min:.2f}–{lon_max:.2f}] "
-          f"lat [{lat_min:.2f}–{lat_max:.2f}]")
+    lon_min, lat_min = bbox[0] - 0.05, bbox[1] - 0.05
+    lon_max, lat_max = bbox[2] + 0.05, bbox[3] + 0.05
 
+    print(f"  BBox estado: lon[{lon_min:.2f}–{lon_max:.2f}] "
+          f"lat[{lat_min:.2f}–{lat_max:.2f}]")
+
+    # ── Crear grilla ──────────────────────────────────────────────────────────
     grid_lon, grid_lat = np.meshgrid(
         np.linspace(lon_min, lon_max, GRID_RESOLUCION),
         np.linspace(lat_min, lat_max, GRID_RESOLUCION),
     )
 
-    print(f"  Interpolando IDW {GRID_RESOLUCION}×{GRID_RESOLUCION}...")
-
-    # ── IDW con potencia baja para más contraste ──────────────────────────────
+    # ── IDW ───────────────────────────────────────────────────────────────────
+    print("  Interpolando IDW...")
     grid_ivs = interpolar_idw(
-    lons, lats, ivs,
-    grid_lon, grid_lat,
-    potencia=IDW_POTENCIA,
-    vecinos=IDW_VECINOS,
-)
-    # ── Normalización por percentiles para máximo contraste visual ────────────
-    # Usar p5–p95 en lugar de min–max evita que outliers aplasten el rango
-    vmin = np.percentile(grid_ivs, 5)
-    vmax = np.percentile(grid_ivs, 95)
-    print(f"  Escala de color p5–p95: [{vmin:.3f} — {vmax:.3f}]")
-    print(f"  Rango real grilla:      [{grid_ivs.min():.3f} — {grid_ivs.max():.3f}]")
+        lons, lats, ivs,
+        grid_lon, grid_lat,
+        potencia=IDW_POTENCIA,
+        vecinos=IDW_VECINOS,
+    )
+
+    # ── MÁSCARA — solo mostrar dentro del polígono estatal ────────────────────
+    print("  Aplicando máscara al límite estatal (esto tarda ~20s)...")
+    filas, cols = grid_lon.shape
+    mascara = np.zeros((filas, cols), dtype=bool)
+
+    for i in range(filas):
+        for j in range(cols):
+            punto = Point(grid_lon[i, j], grid_lat[i, j])
+            mascara[i, j] = not poligono_estado.contains(punto)
+
+    grid_ivs_masked = np.ma.masked_where(mascara, grid_ivs)
+    print(f"  Celdas dentro del estado: "
+          f"{(~mascara).sum():,} / {filas*cols:,}")
+
+    # ── Escala de color por percentiles del área enmascarada ──────────────────
+    valores_validos = grid_ivs_masked.compressed()
+    vmin = np.percentile(valores_validos, 5)
+    vmax = np.percentile(valores_validos, 95)
+    print(f"  Escala p5–p95: [{vmin:.3f}–{vmax:.3f}]")
 
     # ── Figura ────────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(12, 11))
 
-    from matplotlib.colors import PowerNorm
-    import matplotlib.colors as mcolors
+    # Fondo del mapa (color neutro para mar/exterior)
+    ax.set_facecolor("#d6eaf8")
 
-    # PowerNorm gamma<1 estira los valores bajos, gamma>1 estira los altos
-    # Con gamma=0.5 los valores medios-altos se ven más distintos
-    norma = PowerNorm(gamma=0.6, vmin=vmin, vmax=vmax)
+    # Superficie interpolada enmascarada
+    from matplotlib.colors import PowerNorm
+    norma = PowerNorm(gamma=0.7, vmin=vmin, vmax=vmax)
 
     img = ax.pcolormesh(
-        grid_lon, grid_lat, grid_ivs,
+        grid_lon, grid_lat, grid_ivs_masked,
         cmap="RdYlGn_r",
         norm=norma,
         shading="gouraud",
-        zorder=1,
-)
-    # ── Límites municipales y estatal ─────────────────────────────────────────
-    if gdf_mun is not None:
-        # Contornos municipales
-        gdf_mun.boundary.plot(
-            ax=ax, linewidth=0.8,
-            edgecolor="white", alpha=0.7, zorder=2
-        )
-        # Contorno estatal más grueso
-        from shapely.ops import unary_union
-        estado_geom = unary_union(gdf_mun.geometry)
-        import geopandas as gpd2
-        gdf_estado = gpd2.GeoDataFrame(geometry=[estado_geom],
-                                        crs=gdf_mun.crs)
-        gdf_estado.boundary.plot(
-            ax=ax, linewidth=2.0,
-            edgecolor="black", zorder=3
-        )
+        zorder=2,
+    )
 
-        # Etiquetas de acrónimos en centroides
-        ACRONIMOS_MAP = {
-            "Calkiní":     "CK", "Campeche":    "CA", "Carmen":    "CR",
-            "Champotón":   "CH", "Hecelchakán": "HE", "Hopelchén": "HO",
-            "Palizada":    "PA", "Tenabo":       "TE", "Escárcega": "ES",
-            "Calakmul":    "CL", "Candelaria":   "CN", "Seybaplaya":"SY",
-        }
-        col_nom = "NOMGEO" if "NOMGEO" in gdf_mun.columns else \
-                  "NOM_MUN" if "NOM_MUN" in gdf_mun.columns else None
+    # Contornos municipales
+    gdf_mun.boundary.plot(
+        ax=ax, linewidth=0.8,
+        edgecolor="white", alpha=0.8, zorder=3
+    )
 
-        if col_nom:
-            for _, row in gdf_mun.iterrows():
-                if row.geometry:
-                    c   = row.geometry.centroid
-                    nom = str(row[col_nom])
-                    acr = ACRONIMOS_MAP.get(nom, nom[:2].upper())
-                    ax.annotate(
-                        acr, xy=(c.x, c.y),
-                        ha="center", va="center",
-                        fontsize=11, color="white",
-                        fontweight="bold", zorder=5,
-                        bbox=dict(boxstyle="round,pad=0.15",
-                                  fc="black", alpha=0.35, ec="none")
-                    )
+    # Contorno estatal grueso
+    gdf_estado = gpd.GeoDataFrame(
+        geometry=[poligono_estado], crs=gdf_mun.crs
+    )
+    gdf_estado.boundary.plot(
+        ax=ax, linewidth=2.2,
+        edgecolor="black", zorder=4
+    )
 
-    # ── Puntos de localidades ─────────────────────────────────────────────────
+    # Etiquetas de municipios
+    ACRONIMOS_MAP = {
+        "Calkiní":     "CK", "Campeche":    "CA", "Carmen":    "CR",
+        "Champotón":   "CH", "Hecelchakán": "HE", "Hopelchén": "HO",
+        "Palizada":    "PA", "Tenabo":       "TE", "Escárcega": "ES",
+        "Calakmul":    "CL", "Candelaria":   "CN", "Seybaplaya":"SY",
+    }
+    col_nom = next((c for c in ["NOMGEO", "NOM_MUN"]
+                    if c in gdf_mun.columns), None)
+    if col_nom:
+        for _, row in gdf_mun.iterrows():
+            if row.geometry:
+                c   = row.geometry.centroid
+                nom = str(row[col_nom])
+                acr = ACRONIMOS_MAP.get(nom, nom[:2].upper())
+                ax.annotate(
+                    acr, xy=(c.x, c.y),
+                    ha="center", va="center",
+                    fontsize=11, color="white", fontweight="bold",
+                    zorder=6,
+                    bbox=dict(boxstyle="round,pad=0.2",
+                              fc="black", alpha=0.4, ec="none")
+                )
+
+    # Puntos de localidades
     ax.scatter(lons, lats, c="black", s=3,
-               alpha=0.35, zorder=4, label="Localidades")
+               alpha=0.3, zorder=5)
 
-    # ── Barra de color ────────────────────────────────────────────────────────
+    # Barra de color
     cbar = plt.colorbar(img, ax=ax, shrink=0.6, pad=0.02, aspect=20)
     cbar.set_label("Índice de Vulnerabilidad Socioterritorial (IVS)",
-               fontsize=FS_EJE)
+                   fontsize=FS_EJE)
     cbar.ax.tick_params(labelsize=FS_TICK)
-    niveles_val = np.linspace(vmin, vmax, 5)
-    cbar.set_ticks(niveles_val)
-    cbar.set_ticklabels([f"{v:.3f}" for v in niveles_val])
+    ticks = np.linspace(vmin, vmax, 5)
+    cbar.set_ticks(ticks)
+    cbar.set_ticklabels([f"{v:.3f}" for v in ticks])
 
-    # ── Ejes y título ─────────────────────────────────────────────────────────
     ax.set_xlim(lon_min, lon_max)
     ax.set_ylim(lat_min, lat_max)
     ax.set_xlabel("Longitud (°)", fontsize=FS_EJE)
