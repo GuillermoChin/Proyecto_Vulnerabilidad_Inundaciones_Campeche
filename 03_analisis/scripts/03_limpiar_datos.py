@@ -58,8 +58,9 @@ def estandarizar_claves(df_iter: pd.DataFrame,
     Asegura que ambas tablas tengan una clave municipal de 3 dígitos
     con ceros a la izquierda (ej: '001', '011') para que el merge funcione.
     """
-    df_iter["CVE_MUN"] = df_iter["MUN"].str.zfill(3)
-    df_iml["CVE_MUN"]  = df_iml["MUN"].str.zfill(3)
+    df_iter["CVE_MUN"] = df_iter["MUN"].astype(str).str.zfill(3)
+    # El IML puede traer MUN como numérico — convertir a string primero
+    df_iml["CVE_MUN"]  = df_iml["MUN"].astype(str).str.strip().str.zfill(3)
     print("  Claves municipales estandarizadas ✓")
     return df_iter, df_iml
 
