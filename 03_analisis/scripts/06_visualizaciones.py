@@ -110,18 +110,34 @@ COLORES_NIVELES = {
 }
 
 # ── Variables normalizadas ────────────────────────────────────────────────────
-VARS_NORM = ["NORM_VS1", "NORM_VS2", "NORM_VS3", "NORM_VS4",
-             "NORM_VS5", "NORM_EF1", "NORM_EF2", "NORM_EF3"]
+VARS_NORM = [
+    "NORM_SS1", "NORM_SS2", "NORM_SS3", "NORM_SS4", "NORM_SS5",
+    "NORM_EF1", "NORM_EF2", "NORM_EF3",
+    "NORM_CA1", "NORM_CA2", "NORM_CA3", "NORM_CA4",
+    "NORM_GV1", "NORM_GV2", "NORM_GV3", "NORM_GV4",
+]
 
 ETIQUETAS_VARS = {
-    "NORM_VS1": "Analfabetismo",
-    "NORM_VS2": "Sin agua",
-    "NORM_VS3": "Sin drenaje",
-    "NORM_VS4": "Piso tierra",
-    "NORM_VS5": "Sin salud",
+    # SS — Sensibilidad Social
+    "NORM_SS1": "Analfabetismo",
+    "NORM_SS2": "Sin agua",
+    "NORM_SS3": "Sin drenaje",
+    "NORM_SS4": "Piso tierra",
+    "NORM_SS5": "Sin salud",
+    # EF — Exposición Física
     "NORM_EF1": "Densidad pob.",
     "NORM_EF2": "Sin electricidad",
     "NORM_EF3": "Sin bienes",
+    # CA — Capacidad Adaptativa (inversas)
+    "NORM_CA1": "Escolaridad (inv.)",
+    "NORM_CA2": "Educ. básica (inv.)",
+    "NORM_CA3": "Derechohabiencia (inv.)",
+    "NORM_CA4": "Ocupación (inv.)",
+    # GV — Grupos Vulnerables
+    "NORM_GV1": "Adultos mayores",
+    "NORM_GV2": "Población 0-14",
+    "NORM_GV3": "Hablantes LI",
+    "NORM_GV4": "Discapacidad",
 }
 
 # ── Paleta de colores por variable (para radar invertido) ─────────────────────
@@ -229,21 +245,25 @@ def fig01_ranking_ivs(df: pd.DataFrame) -> None:
 
 def fig02_dimensiones_barras(df: pd.DataFrame) -> None:
     """
-    FIG 02 — Barras agrupadas DIM_SS y DIM_EF.
-    Usa acrónimos en eje X para evitar solapamiento.
+    FIG 02 — Barras agrupadas DIM_SS, DIM_EF, DIM_CA y DIM_GV.
     """
     df_plot = df.sort_values("IVS", ascending=False)
     x       = np.arange(len(df_plot))
-    ancho   = 0.35
+    ancho   = 0.20   # Más angosto para caber 4 grupos
 
-    fig, ax = plt.subplots(figsize=(13, 7))
+    fig, ax = plt.subplots(figsize=(14, 7))
 
-    ax.bar(x - ancho/2, df_plot["DIM_SS"], ancho,
-           label=f"Sensibilidad Social (peso {PESOS_DIMENSIONES['SS']})",
-           color="#e07b54", edgecolor="white")
-    ax.bar(x + ancho/2, df_plot["DIM_EF"], ancho,
-           label=f"Exposición Física (peso {PESOS_DIMENSIONES['EF']})",
-           color="#5b9bd5", edgecolor="white")
+    dims_config = [
+        ("DIM_SS", f"Sensibilidad Social (peso {PESOS_DIMENSIONES['SS']})",  "#e07b54"),
+        ("DIM_EF", f"Exposición Física (peso {PESOS_DIMENSIONES['EF']})",    "#5b9bd5"),
+        ("DIM_CA", f"Capacidad Adaptativa (peso {PESOS_DIMENSIONES['CA']})", "#70ad47"),
+        ("DIM_GV", f"Grupos Vulnerables (peso {PESOS_DIMENSIONES['GV']})",   "#9b59b6"),
+    ]
+
+    offsets = [-1.5, -0.5, 0.5, 1.5]  # Posición relativa de cada barra
+    for (col, label, color), offset in zip(dims_config, offsets):
+        ax.bar(x + offset * ancho, df_plot[col], ancho,
+               label=label, color=color, edgecolor="white", linewidth=0.4)
 
     ax.set_xticks(x)
     ax.set_xticklabels(df_plot["ACR"], rotation=0,
@@ -253,12 +273,11 @@ def fig02_dimensiones_barras(df: pd.DataFrame) -> None:
         "Comparación de dimensiones del IVS por municipio\n"
         "Campeche, México (2020)",
         fontsize=FS_TITULO, pad=14)
-    ax.legend(fontsize=FS_LEYENDA)
-    ax.set_ylim(0, 1.10)
+    ax.legend(fontsize=FS_LEYENDA - 1, ncol=2)
+    ax.set_ylim(0, 1.15)
     ax.tick_params(axis="y", labelsize=FS_TICK)
     ax.spines[["top", "right"]].set_visible(False)
 
-    # Tabla de acrónimos al pie
     plt.tight_layout()
     ruta = DIR_FIGURAS / f"fig02_dimensiones_barras.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
@@ -272,6 +291,21 @@ def fig03_heatmap_variables(df: pd.DataFrame) -> None:
     Usa nombres completos en filas.
     """
     cols_disp = [c for c in VARS_NORM if c in df.columns]
+    n_ss = sum(1 for c in cols_disp if "SS" in c)
+    n_ef = n_ss + sum(1 for c in cols_disp if "EF" in c)
+    n_ca = n_ef + sum(1 for c in cols_disp if "CA" in c)
+    for pos, label, color in [
+    (n_ss / 2,          "Dim. SS", "#c0392b"),
+    (n_ss + (n_ef - n_ss) / 2, "Dim. EF", "#2980b9"),
+    (n_ef + (n_ca - n_ef) / 2, "Dim. CA", "#27ae60"),
+    (n_ca + (len(cols_disp) - n_ca) / 2, "Dim. GV", "#8e44ad"),
+    ]:
+        ax.text(pos, -0.7, label, ha="center", fontsize=FS_EJE,
+            color=color, fontweight="bold",
+            transform=ax.get_xaxis_transform())
+
+    for separador in [n_ss, n_ef, n_ca]:
+        ax.axvline(x=separador, color="black", linewidth=1.5, linestyle="--")
     df_plot   = df.sort_values("IVS", ascending=False).set_index("NOM_MUN")
     matriz    = df_plot[cols_disp].rename(columns=ETIQUETAS_VARS)
 
@@ -620,10 +654,14 @@ def generar_reporte(df: pd.DataFrame) -> None:
         f.write(f"  Entidad:       Campeche (clave 04)\n")
         f.write(f"  N municipios:  {len(df)}\n")
         f.write(f"  Método:        Promedio ponderado + normalización min-max\n")
-        f.write(f"  Peso DIM_SS:   {PESOS_DIMENSIONES['SS']}\n")
-        f.write(f"  Peso DIM_EF:   {PESOS_DIMENSIONES['EF']}\n")
-        f.write(f"  Variables VS:  VS1-VS5 (5 variables)\n")
-        f.write(f"  Variables EF:  EF1-EF3 (3 variables)\n")
+        f.write(f"  Peso DIM_SS:   {PESOS_DIMENSIONES['SS']}  (Sensibilidad Social)\n")
+        f.write(f"  Peso DIM_EF:   {PESOS_DIMENSIONES['EF']}  (Exposición Física)\n")
+        f.write(f"  Peso DIM_CA:   {PESOS_DIMENSIONES['CA']}  (Capacidad Adaptativa)\n")
+        f.write(f"  Peso DIM_GV:   {PESOS_DIMENSIONES['GV']}  (Grupos Vulnerables)\n")
+        f.write(f"  Variables SS:  SS1-SS5 (5 variables de sensibilidad social)\n")
+        f.write(f"  Variables EF:  EF1-EF3 (3 variables de exposición física)\n")
+        f.write(f"  Variables CA:  CA1-CA4 (4 variables de capacidad adaptativa)\n")
+        f.write(f"  Variables GV:  GV1-GV4 (4 variables de grupos vulnerables)\n")
         f.write(f"  Niveles IVS:   {' | '.join(NIVELES_INDICE)}\n")
 
         subtitulo("2. ESTADÍSTICAS DESCRIPTIVAS — VARIABLES NORMALIZADAS")
@@ -694,14 +732,21 @@ def generar_reporte(df: pd.DataFrame) -> None:
 
         subtitulo("8. NOTAS METODOLÓGICAS")
         f.write(
-            "  - Normalización min-max por variable, rango [0,1].\n"
-            "  - DIM_SS = promedio simple NORM_VS1 a NORM_VS5.\n"
-            "  - DIM_EF = promedio simple NORM_EF1 a NORM_EF3.\n"
-            "  - IVS = DIM_SS × 0.6 + DIM_EF × 0.4.\n"
-            "  - Clasificación: quintiles del IVS.\n"
-            "  - Outliers conservados (N=12).\n"
-            "  - Marco de referencia: Marco de Sendai 2015-2030.\n"
-        )
+        "  - Normalización min-max por variable, rango [0,1].\n"
+        "  - Variables CA (Capacidad Adaptativa) se normalizan invertidas:\n"
+        "    mayor valor = menor vulnerabilidad → NORM = 1 - minmax(PROP).\n"
+        "  - DIM_SS = promedio simple NORM_SS1 a NORM_SS5.\n"
+        "  - DIM_EF = promedio simple NORM_EF1 a NORM_EF3.\n"
+        "  - DIM_CA = promedio simple NORM_CA1 a NORM_CA4 (invertidas).\n"
+        "  - DIM_GV = promedio simple NORM_GV1 a NORM_GV4.\n"
+        f"  - IVS = DIM_SS×{PESOS_DIMENSIONES['SS']} + "
+        f"DIM_EF×{PESOS_DIMENSIONES['EF']} + "
+        f"DIM_CA×{PESOS_DIMENSIONES['CA']} + "
+        f"DIM_GV×{PESOS_DIMENSIONES['GV']}.\n"
+        "  - Clasificación: quintiles del IVS.\n"
+        "  - Outliers conservados (N=12).\n"
+        "  - Marco de referencia: Marco de Sendai 2015-2030.\n"
+    )
 
         linea()
         f.write(f"  Fin del reporte — {ahora}\n")
