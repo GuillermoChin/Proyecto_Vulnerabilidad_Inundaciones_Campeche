@@ -621,24 +621,40 @@ def generar_panel_comparativo(df, gdf_mun, poligono_estado,
     ax0 = axes_flat[0]
     ax0.set_facecolor("#d6eaf8")
 
-    gdf_coro.plot(
-        column="IVS",
-        cmap="RdYlGn_r",
-        linewidth=0.5,
-        edgecolor="white",
-        legend=True,
-        legend_kwds={
-            "label": "IVS",
-            "orientation": "horizontal",
-            "shrink": 0.7,
-            "pad": 0.04,
-        },
-        ax=ax0,
-        missing_kwds={"color": "#cccccc"},
-        zorder=2,
-    )
+    # Usar pcolormesh manual para que la colorbar sea igual a los demás
+    vmin_coro = gdf_coro["IVS"].min()
+    vmax_coro = gdf_coro["IVS"].max()
+    norma_coro = PowerNorm(gamma=0.7, vmin=vmin_coro, vmax=vmax_coro)
+    cmap_coro  = plt.get_cmap("RdYlGn_r")
+
+    # Dibujar cada municipio con su color correspondiente
+    for _, row in gdf_coro.iterrows():
+        if row.geometry and not pd.isna(row.get("IVS", None)):
+            color = cmap_coro(norma_coro(row["IVS"]))
+            import geopandas as gpd2
+            gpd2.GeoDataFrame(geometry=[row.geometry], crs="EPSG:4326").plot(
+                ax=ax0, color=[color], edgecolor="white",
+                linewidth=0.5, zorder=2
+            )
+        elif row.geometry:
+            import geopandas as gpd2
+            gpd2.GeoDataFrame(geometry=[row.geometry], crs="EPSG:4326").plot(
+                ax=ax0, color="#cccccc", edgecolor="white",
+                linewidth=0.5, zorder=2
+            )
+
     agregar_contornos(ax0)
     agregar_etiquetas(ax0)
+
+    # Colorbar vertical igual que los demás paneles
+    sm_coro = plt.cm.ScalarMappable(cmap=cmap_coro, norm=norma_coro)
+    sm_coro.set_array([])
+    cbar0 = plt.colorbar(sm_coro, ax=ax0, shrink=0.7, pad=0.02)
+    cbar0.ax.tick_params(labelsize=8)
+    ticks0 = np.linspace(vmin_coro, vmax_coro, 3)
+    cbar0.set_ticks(ticks0)
+    cbar0.set_ticklabels([f"{v:.2f}" for v in ticks0])
+
     ajustar_ejes(ax0)
     ax0.set_title("IVS por Municipio (Coroplético)",
                   fontsize=12, fontweight="bold", pad=8)
