@@ -53,25 +53,49 @@ NUM_MUNICIPIOS = 13         # Total de municipios en Campeche
 NIVELES_INDICE = ["Muy Alto", "Alto", "Medio", "Bajo", "Muy Bajo"]
 
 # Variables del ITER que entran al índice
-# VS = Vulnerabilidad Social | EF = Exposición Física
+# Dirección: "positiva" = más valor → más vulnerable
+#            "inversa"  = más valor → menos vulnerable (se invierte al normalizar)
 VARIABLES_INDICE = {
-    # --- Dimensión 1: Vulnerabilidad Social (VS) ---
-    "VS1": "P15YM_AN",    # % población analfabeta > 15 años
-    "VS2": "VPH_AGUAFV",  # % viviendas sin agua entubada
-    "VS3": "VPH_NODREN",  # % viviendas sin drenaje
-    "VS4": "VPH_PISODT",  # % viviendas con piso de tierra
-    "VS5": "PSINDER",     # % población sin derechohabiencia a salud
+    # --- Dimensión 1: Sensibilidad Social (SS) ---
+    "SS1": {"col": "P15YM_AN",   "dir": "positiva"},
+    "SS2": {"col": "VPH_AGUAFV", "dir": "positiva"},
+    "SS3": {"col": "VPH_NODREN", "dir": "positiva"},
+    "SS4": {"col": "VPH_PISODT", "dir": "positiva"},
+    "SS5": {"col": "PSINDER",    "dir": "positiva"},
     # --- Dimensión 2: Exposición Física (EF) ---
-    "EF1": "POBTOT",      # Densidad de población (se calculará con área)
-    "EF2": "VPH_C_ELEC",  # % viviendas sin electricidad (proxy precariedad)
-    "EF3": "VPH_SNBIEN",   # % viviendas sin ningún bien (proxy precariedad física)
+    "EF1": {"col": "POBTOT",     "dir": "positiva"},
+    "EF2": {"col": "VPH_C_ELEC", "dir": "positiva"},
+    "EF3": {"col": "VPH_SNBIEN", "dir": "positiva"},
+    # --- Dimensión 3: Capacidad Adaptativa (CA) ---
+    "CA1": {"col": "GRAPROES",   "dir": "inversa"},
+    "CA2": {"col": "P18YM_PB",   "dir": "inversa"},
+    "CA3": {"col": "PDER_IMSS",  "dir": "inversa"},
+    "CA4": {"col": "POCUPADA",   "dir": "inversa"},
+    # --- Dimensión 4: Grupos Vulnerables (GV) ---
+    "GV1": {"col": "P60YMAS",    "dir": "positiva"},
+    "GV2": {"col": "POB0_14",    "dir": "positiva"},
+    "GV3": {"col": "P3YM_HLI",   "dir": "positiva"},
+    "GV4": {"col": "PCON_DISC",  "dir": "positiva"},
 }
 
-# Pesos de cada dimensión en el índice compuesto (deben sumar 1.0)
+# ── Pesos de dimensiones (justificados en IPCC AR5 + Cutter 2003) ─────────────
+# Suma = 1.0
+# SS=0.30 — Cutter et al. (2003) Social Vulnerability Index
+# EF=0.25 — IPCC AR5 (2014) exposure component
+# CA=0.25 — IPCC AR5 (2014) adaptive capacity component
+# GV=0.20 — Wisner et al. (2004) "At Risk" framework
 PESOS_DIMENSIONES = {
-    "VS": 0.6,   # Vulnerabilidad Social tiene mayor peso
-    "EF": 0.4,   # Exposición Física
+    "SS": 0.30,
+    "EF": 0.25,
+    "CA": 0.25,
+    "GV": 0.20,
 }
+# ── Columnas de variables (extraídas del diccionario para uso en scripts) ─────
+COLS_VARIABLES = [v["col"] for v in VARIABLES_INDICE.values()]
+
+# ── Variables con normalización inversa ───────────────────────────────────────
+VARS_INVERSAS = [k for k, v in VARIABLES_INDICE.items()
+                 if v["dir"] == "inversa"]
 
 # ── Parámetros de visualización ───────────────────────────────────────────────
 DPI_FIGURAS    = 300        # Resolución de figuras para publicación
