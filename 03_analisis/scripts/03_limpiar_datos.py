@@ -103,8 +103,19 @@ def calcular_proporciones(df: pd.DataFrame) -> pd.DataFrame:
     Variables de población → dividir entre POBTOT
     Variables de vivienda  → dividir entre TVIVHAB
     """
-    VARS_POBLACION = ["P15YM_AN", "PSINDER", "PLOCRUG"]
-    VARS_VIVIENDA  = ["VPH_AGUAFV", "VPH_NODREN", "VPH_PISODT", "VPH_C_ELEC"]
+    VARS_POBLACION = [
+    "P15YM_AN", "PSINDER",
+    # CA — Capacidad Adaptativa
+    "P18YM_PB", "PDER_IMSS", "POCUPADA",
+    # GV — Grupos Vulnerables
+    "P60YMAS", "POB0_14", "P3YM_HLI", "PCON_DISC",
+    ]
+    VARS_VIVIENDA = [
+    "VPH_AGUAFV", "VPH_NODREN", "VPH_PISODT",
+    "VPH_C_ELEC", "VPH_SNBIEN",
+    ]
+    # GRAPROES es promedio — no se divide, se normaliza directamente
+    VARS_DIRECTAS = ["GRAPROES"]
 
     for col in VARS_POBLACION:
         if col in df.columns and "POBTOT" in df.columns:
