@@ -149,7 +149,7 @@ def clasificar_niveles(df: pd.DataFrame) -> pd.DataFrame:
     df["NIVEL_IVS"] = pd.cut(
         df["IVS"],
         bins=cortes,
-        labels=NIVELES_INDICE,
+        labels=NIVELES_INDICE[::-1],  # Invierte: Muy Bajo→bin bajo, Muy Alto→bin alto
         include_lowest=True,
         ordered=True,
     )
