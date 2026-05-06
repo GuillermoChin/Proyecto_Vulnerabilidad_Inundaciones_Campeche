@@ -239,7 +239,7 @@ def fig02_dimensiones_barras(df: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(13, 7))
 
     ax.bar(x - ancho/2, df_plot["DIM_SS"], ancho,
-           label=f"Sensibilidad Social (peso {PESOS_DIMENSIONES['VS']})",
+           label=f"Sensibilidad Social (peso {PESOS_DIMENSIONES['SS']})",
            color="#e07b54", edgecolor="white")
     ax.bar(x + ancho/2, df_plot["DIM_EF"], ancho,
            label=f"Exposición Física (peso {PESOS_DIMENSIONES['EF']})",
@@ -620,7 +620,7 @@ def generar_reporte(df: pd.DataFrame) -> None:
         f.write(f"  Entidad:       Campeche (clave 04)\n")
         f.write(f"  N municipios:  {len(df)}\n")
         f.write(f"  Método:        Promedio ponderado + normalización min-max\n")
-        f.write(f"  Peso DIM_SS:   {PESOS_DIMENSIONES['VS']}\n")
+        f.write(f"  Peso DIM_SS:   {PESOS_DIMENSIONES['SS']}\n")
         f.write(f"  Peso DIM_EF:   {PESOS_DIMENSIONES['EF']}\n")
         f.write(f"  Variables VS:  VS1-VS5 (5 variables)\n")
         f.write(f"  Variables EF:  EF1-EF3 (3 variables)\n")
