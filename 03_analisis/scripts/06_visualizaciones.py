@@ -288,28 +288,13 @@ def fig02_dimensiones_barras(df: pd.DataFrame) -> None:
 def fig03_heatmap_variables(df: pd.DataFrame) -> None:
     """
     FIG 03 — Heatmap de variables normalizadas por municipio.
-    Usa nombres completos en filas.
+    Separadores para las 4 dimensiones: SS, EF, CA, GV.
     """
     cols_disp = [c for c in VARS_NORM if c in df.columns]
-    n_ss = sum(1 for c in cols_disp if "SS" in c)
-    n_ef = n_ss + sum(1 for c in cols_disp if "EF" in c)
-    n_ca = n_ef + sum(1 for c in cols_disp if "CA" in c)
-    for pos, label, color in [
-    (n_ss / 2,          "Dim. SS", "#c0392b"),
-    (n_ss + (n_ef - n_ss) / 2, "Dim. EF", "#2980b9"),
-    (n_ef + (n_ca - n_ef) / 2, "Dim. CA", "#27ae60"),
-    (n_ca + (len(cols_disp) - n_ca) / 2, "Dim. GV", "#8e44ad"),
-    ]:
-        ax.text(pos, -0.7, label, ha="center", fontsize=FS_EJE,
-            color=color, fontweight="bold",
-            transform=ax.get_xaxis_transform())
-
-    for separador in [n_ss, n_ef, n_ca]:
-        ax.axvline(x=separador, color="black", linewidth=1.5, linestyle="--")
     df_plot   = df.sort_values("IVS", ascending=False).set_index("NOM_MUN")
     matriz    = df_plot[cols_disp].rename(columns=ETIQUETAS_VARS)
 
-    fig, ax = plt.subplots(figsize=(13, 8))
+    fig, ax = plt.subplots(figsize=(18, 8))
 
     sns.heatmap(
         matriz,
@@ -330,14 +315,24 @@ def fig03_heatmap_variables(df: pd.DataFrame) -> None:
     ax.tick_params(axis="x", rotation=30, labelsize=FS_TICK)
     ax.tick_params(axis="y", rotation=0,  labelsize=FS_TICK)
 
-    n_vs = sum(1 for c in cols_disp if "VS" in c)
-    ax.axvline(x=n_vs, color="black", linewidth=1.8, linestyle="--")
-    ax.text(n_vs / 2, -0.7, "Dim. VS", ha="center",
-            fontsize=FS_EJE, color="#c0392b", fontweight="bold",
-            transform=ax.get_xaxis_transform())
-    ax.text(n_vs + (len(cols_disp) - n_vs) / 2, -0.7, "Dim. EF",
-            ha="center", fontsize=FS_EJE, color="#2980b9", fontweight="bold",
-            transform=ax.get_xaxis_transform())
+    # ── Separadores y etiquetas de dimensiones ────────────────────────────────
+    n_ss = sum(1 for c in cols_disp if "SS" in c)
+    n_ef = n_ss + sum(1 for c in cols_disp if "EF" in c)
+    n_ca = n_ef + sum(1 for c in cols_disp if "CA" in c)
+
+    for separador in [n_ss, n_ef, n_ca]:
+        ax.axvline(x=separador, color="black", linewidth=1.5, linestyle="--")
+
+    for pos, label, color in [
+        (n_ss / 2,                          "Dim. SS", "#c0392b"),
+        (n_ss + (n_ef - n_ss) / 2,          "Dim. EF", "#2980b9"),
+        (n_ef + (n_ca - n_ef) / 2,          "Dim. CA", "#27ae60"),
+        (n_ca + (len(cols_disp) - n_ca) / 2,"Dim. GV", "#8e44ad"),
+    ]:
+        ax.text(pos, -0.7, label, ha="center", fontsize=FS_EJE,
+                color=color, fontweight="bold",
+                transform=ax.get_xaxis_transform())
+
     plt.tight_layout()
     ruta = DIR_FIGURAS / f"fig03_heatmap_variables.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
