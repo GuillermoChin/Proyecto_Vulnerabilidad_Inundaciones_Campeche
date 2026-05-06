@@ -115,7 +115,8 @@ def calcular_proporciones(df: pd.DataFrame) -> pd.DataFrame:
     "VPH_C_ELEC", "VPH_SNBIEN",
     ]
     # GRAPROES es promedio — no se divide, se normaliza directamente
-    VARS_DIRECTAS = ["GRAPROES"]
+    VARS_DIRECTAS  = ["GRAPROES"]   # Escala continua — no dividir
+    VARS_POBLACION_DIRECTA = ["P60YMAS"]  # Se divide entre POBTOT
 
     for col in VARS_POBLACION:
         if col in df.columns and "POBTOT" in df.columns:
@@ -130,6 +131,19 @@ def calcular_proporciones(df: pd.DataFrame) -> pd.DataFrame:
             df[nueva_col] = df[col] / df["TVIVHAB"]
             df[nueva_col] = df[nueva_col].clip(0, 1)
             print(f"  Proporción calculada: {nueva_col}")
+            
+    for col in VARS_DIRECTAS:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+            df[f"PROP_{col}"] = df[col]
+            print(f"  Variable directa procesada: PROP_{col}")
+
+    # P60YMAS se divide entre POBTOT igual que las demás de población
+    for col in ["P60YMAS"]:
+        if col in df.columns and "POBTOT" in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+            df[f"PROP_{col}"] = (df[col] / df["POBTOT"]).clip(0, 1)
+            print(f"  Proporción calculada: PROP_{col}")
 
     # POBTOT se convierte en densidad más adelante (requiere shapefile)
     # Por ahora se mantiene como valor absoluto
