@@ -170,8 +170,8 @@ def generar_ranking(df: pd.DataFrame) -> pd.DataFrame:
 
     print(f"\n  Ranking final de vulnerabilidad:")
     print(f"\n  {'#':<4} {'Municipio':<30} {'IVS':>7} {'Nivel':<12} "
-          f"{'DIM_VS':>8} {'DIM_EF':>8}")
-    print("  " + "-" * 75)
+            f"{'DIM_SS':>8} {'DIM_EF':>8} {'DIM_CA':>8} {'DIM_GV':>8}")
+    print("  " + "-" * 90)
     for _, fila in df.iterrows():
         print(
             f"  {int(fila['RANKING']):<4} {fila['NOM_MUN']:<30} "
@@ -188,8 +188,9 @@ def exportar_tabla_articulo(df: pd.DataFrame) -> None:
     para incluir en el artículo (04_outputs/tablas/).
     """
     cols_articulo = [
-        "RANKING", "NOM_MUN", "DIM_VS", "DIM_EF", "IVS", "NIVEL_IVS"
-    ]
+                    "RANKING", "NOM_MUN", "DIM_SS", "DIM_EF",
+                    "DIM_CA", "DIM_GV", "IVS", "NIVEL_IVS"
+                    ]
     cols_disponibles = [c for c in cols_articulo if c in df.columns]
     df_art = df[cols_disponibles].copy()
 
