@@ -28,19 +28,30 @@ from config import (
     VARIABLES_INDICE,
 )
 
-
 # ── Mapeo de variables del índice a sus columnas de proporción ────────────────
-# Después del script 03, las variables absolutas se convirtieron en PROP_*
-# POBTOT es la excepción: se usará directamente como densidad relativa
+# Después del script 03 las variables absolutas → PROP_*
+# Las variables de CA se invierten: NORM = 1 - minmax(PROP)
 VARS_NORMALIZACION = {
-    "VS1": "PROP_P15YM_AN",
-    "VS2": "PROP_VPH_AGUAFV",
-    "VS3": "PROP_VPH_NODREN",
-    "VS4": "PROP_VPH_PISODT",
-    "VS5": "PROP_PSINDER",
-    "EF1": "POBTOT",          # Se normaliza directamente (densidad relativa)
-    "EF2": "PROP_VPH_C_ELEC",
-    "EF3": "PROP_VPH_SNBIEN",
+    # SS — Sensibilidad Social
+    "SS1": {"prop": "PROP_P15YM_AN",   "inv": False},
+    "SS2": {"prop": "PROP_VPH_AGUAFV", "inv": False},
+    "SS3": {"prop": "PROP_VPH_NODREN", "inv": False},
+    "SS4": {"prop": "PROP_VPH_PISODT", "inv": False},
+    "SS5": {"prop": "PROP_PSINDER",    "inv": False},
+    # EF — Exposición Física
+    "EF1": {"prop": "POBTOT",          "inv": False},
+    "EF2": {"prop": "PROP_VPH_C_ELEC", "inv": False},
+    "EF3": {"prop": "PROP_VPH_SNBIEN", "inv": False},
+    # CA — Capacidad Adaptativa (inversas)
+    "CA1": {"prop": "PROP_GRAPROES",   "inv": True},
+    "CA2": {"prop": "PROP_P18YM_PB",   "inv": True},
+    "CA3": {"prop": "PROP_PDER_IMSS",  "inv": True},
+    "CA4": {"prop": "PROP_POCUPADA",   "inv": True},
+    # GV — Grupos Vulnerables
+    "GV1": {"prop": "PROP_P60YMAS",    "inv": False},
+    "GV2": {"prop": "PROP_POB0_14",    "inv": False},
+    "GV3": {"prop": "PROP_P3YM_HLI",   "inv": False},
+    "GV4": {"prop": "PROP_PCON_DISC",  "inv": False},
 }
 
 
@@ -84,28 +95,37 @@ def normalizar_minmax(serie: pd.Series) -> pd.Series:
 
 def aplicar_normalizacion(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Aplica normalización min-max a cada variable del índice.
-    Crea columnas nuevas con prefijo NORM_ para cada variable.
-    Reporta estadísticas básicas de cada variable normalizada.
+    Aplica normalización min-max a cada variable.
+    Las variables inversas se normalizan como: NORM = 1 - minmax(PROP)
+    Mayor NORM siempre = mayor vulnerabilidad.
     """
-    print("\n  Normalización min-max por variable:")
-    print(f"  {'Variable':<10} {'Col. origen':<22} {'Min orig':>9} "
-          f"{'Max orig':>9} {'Media norm':>10}")
-    print("  " + "-" * 65)
+    print(f"\n  {'Variable':<8} {'Prop':<22} {'Inv':>5} "
+          f"{'Min':>8} {'Max':>8} {'MediaNorm':>10}")
+    print("  " + "-" * 68)
 
-    for clave, col_origen in VARS_NORMALIZACION.items():
+    for clave, meta in VARS_NORMALIZACION.items():
+        col_origen = meta["prop"]
+        inversa    = meta["inv"]
+
         if col_origen not in df.columns:
-            print(f"  ⚠ Columna '{col_origen}' no encontrada — se omite {clave}")
+            print(f"  ⚠ {clave:<8} {col_origen:<22} — columna no encontrada")
             continue
 
         col_norm = f"NORM_{clave}"
-        df[col_norm] = normalizar_minmax(df[col_origen])
+        serie    = df[col_origen].copy()
 
-        # Reporte por variable
+        # Normalización min-max base
+        norm = normalizar_minmax(serie)
+
+        # Invertir si es variable de capacidad adaptativa
+        if inversa:
+            norm = 1 - norm
+
+        df[col_norm] = norm
+
         print(
-            f"  {clave:<10} {col_origen:<22} "
-            f"{df[col_origen].min():>9.4f} "
-            f"{df[col_origen].max():>9.4f} "
+            f"  {clave:<8} {col_origen:<22} {'Sí' if inversa else 'No':>5} "
+            f"{serie.min():>8.4f} {serie.max():>8.4f} "
             f"{df[col_norm].mean():>10.4f}"
         )
 
