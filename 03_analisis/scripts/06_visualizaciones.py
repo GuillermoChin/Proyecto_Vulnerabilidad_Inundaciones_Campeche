@@ -229,7 +229,7 @@ def fig01_ranking_ivs(df: pd.DataFrame) -> None:
 
 def fig02_dimensiones_barras(df: pd.DataFrame) -> None:
     """
-    FIG 02 — Barras agrupadas DIM_VS y DIM_EF.
+    FIG 02 — Barras agrupadas DIM_SS y DIM_EF.
     Usa acrónimos en eje X para evitar solapamiento.
     """
     df_plot = df.sort_values("IVS", ascending=False)
@@ -238,8 +238,8 @@ def fig02_dimensiones_barras(df: pd.DataFrame) -> None:
 
     fig, ax = plt.subplots(figsize=(13, 7))
 
-    ax.bar(x - ancho/2, df_plot["DIM_VS"], ancho,
-           label=f"Vulnerabilidad Social (peso {PESOS_DIMENSIONES['VS']})",
+    ax.bar(x - ancho/2, df_plot["DIM_SS"], ancho,
+           label=f"Sensibilidad Social (peso {PESOS_DIMENSIONES['VS']})",
            color="#e07b54", edgecolor="white")
     ax.bar(x + ancho/2, df_plot["DIM_EF"], ancho,
            label=f"Exposición Física (peso {PESOS_DIMENSIONES['EF']})",
@@ -384,20 +384,20 @@ def fig04_mapa_cloropletico(df: pd.DataFrame) -> None:
 # =============================================================================
 
 def exp01_dispersion_vs_ef(df: pd.DataFrame) -> None:
-    """EXP 01 — Dispersión DIM_VS vs DIM_EF con acrónimos."""
+    """EXP 01 — Dispersión DIM_SS vs DIM_EF con acrónimos."""
     colores = [COLORES_NIVELES.get(str(n), "#888") for n in df["NIVEL_IVS"]]
 
     fig, ax = plt.subplots(figsize=(9, 7))
-    ax.scatter(df["DIM_EF"], df["DIM_VS"], c=colores, s=120,
+    ax.scatter(df["DIM_EF"], df["DIM_SS"], c=colores, s=120,
                edgecolors="white", linewidth=0.8, zorder=3)
 
     for _, row in df.iterrows():
         ax.annotate(row["ACR"],
-                    (row["DIM_EF"], row["DIM_VS"]),
+                    (row["DIM_EF"], row["DIM_SS"]),
                     textcoords="offset points", xytext=(6, 4),
                     fontsize=FS_ETIQUETA, color="#222222", fontweight="bold")
 
-    lim = max(df["DIM_VS"].max(), df["DIM_EF"].max()) + 0.07
+    lim = max(df["DIM_SS"].max(), df["DIM_EF"].max()) + 0.07
     ax.plot([0, lim], [0, lim], "--", color="gray",
             linewidth=0.9, label="VS = EF")
 
@@ -407,7 +407,7 @@ def exp01_dispersion_vs_ef(df: pd.DataFrame) -> None:
               title="Nivel IVS", title_fontsize=FS_LEYENDA)
 
     ax.set_xlabel("Dimensión Exposición Física (DIM_EF)", fontsize=FS_EJE)
-    ax.set_ylabel("Dimensión Vulnerabilidad Social (DIM_VS)", fontsize=FS_EJE)
+    ax.set_ylabel("Dimensión Vulnerabilidad Social (DIM_SS)", fontsize=FS_EJE)
     ax.set_title("Relación entre dimensiones del IVS\nMunicipios de Campeche",
                  fontsize=FS_TITULO, pad=12)
     ax.tick_params(labelsize=FS_TICK)
@@ -620,7 +620,7 @@ def generar_reporte(df: pd.DataFrame) -> None:
         f.write(f"  Entidad:       Campeche (clave 04)\n")
         f.write(f"  N municipios:  {len(df)}\n")
         f.write(f"  Método:        Promedio ponderado + normalización min-max\n")
-        f.write(f"  Peso DIM_VS:   {PESOS_DIMENSIONES['VS']}\n")
+        f.write(f"  Peso DIM_SS:   {PESOS_DIMENSIONES['VS']}\n")
         f.write(f"  Peso DIM_EF:   {PESOS_DIMENSIONES['EF']}\n")
         f.write(f"  Variables VS:  VS1-VS5 (5 variables)\n")
         f.write(f"  Variables EF:  EF1-EF3 (3 variables)\n")
@@ -648,7 +648,7 @@ def generar_reporte(df: pd.DataFrame) -> None:
 
         subtitulo("4. RANKING FINAL")
         f.write(f"\n  {'#':<4} {'ACR':<5} {'Municipio':<18} {'IVS':>8} "
-                f"{'Nivel':<12} {'DIM_VS':>8} {'DIM_EF':>8}")
+                f"{'Nivel':<12} {'DIM_SS':>8} {'DIM_EF':>8}")
         if "IML_MUNICIPAL" in df.columns:
             f.write(f" {'IML':>9}")
         f.write("\n")
@@ -657,7 +657,7 @@ def generar_reporte(df: pd.DataFrame) -> None:
             f.write(
                 f"  {int(row['RANKING']):<4} {row['ACR']:<5} "
                 f"{row['NOM_MUN']:<18} {row['IVS']:>8.4f} "
-                f"{str(row['NIVEL_IVS']):<12} {row['DIM_VS']:>8.4f} "
+                f"{str(row['NIVEL_IVS']):<12} {row['DIM_SS']:>8.4f} "
                 f"{row['DIM_EF']:>8.4f}"
             )
             if "IML_MUNICIPAL" in df.columns:
@@ -681,13 +681,13 @@ def generar_reporte(df: pd.DataFrame) -> None:
         if "IML_MUNICIPAL" in df.columns:
             subtitulo("7. VALIDACIÓN EXTERNA — IML vs IVS")
             corr_val = df["IML_MUNICIPAL"].corr(df["IVS"])
-            corr_vs  = df["IML_MUNICIPAL"].corr(df["DIM_VS"])
+            corr_vs  = df["IML_MUNICIPAL"].corr(df["DIM_SS"])
             corr_ef  = df["IML_MUNICIPAL"].corr(df["DIM_EF"])
             interp   = ("Muy alta" if abs(corr_val) >= 0.8 else
                         "Alta"     if abs(corr_val) >= 0.6 else
                         "Moderada" if abs(corr_val) >= 0.4 else "Baja")
             f.write(f"  Pearson IML vs IVS:    r = {corr_val:.4f}\n")
-            f.write(f"  Pearson IML vs DIM_VS: r = {corr_vs:.4f}\n")
+            f.write(f"  Pearson IML vs DIM_SS: r = {corr_vs:.4f}\n")
             f.write(f"  Pearson IML vs DIM_EF: r = {corr_ef:.4f}\n")
             f.write(f"  Interpretación:        Correlación {interp}\n")
             f.write(f"  Nota: Con N=12 interpretar con cautela.\n")
@@ -695,9 +695,9 @@ def generar_reporte(df: pd.DataFrame) -> None:
         subtitulo("8. NOTAS METODOLÓGICAS")
         f.write(
             "  - Normalización min-max por variable, rango [0,1].\n"
-            "  - DIM_VS = promedio simple NORM_VS1 a NORM_VS5.\n"
+            "  - DIM_SS = promedio simple NORM_VS1 a NORM_VS5.\n"
             "  - DIM_EF = promedio simple NORM_EF1 a NORM_EF3.\n"
-            "  - IVS = DIM_VS × 0.6 + DIM_EF × 0.4.\n"
+            "  - IVS = DIM_SS × 0.6 + DIM_EF × 0.4.\n"
             "  - Clasificación: quintiles del IVS.\n"
             "  - Outliers conservados (N=12).\n"
             "  - Marco de referencia: Marco de Sendai 2015-2030.\n"
