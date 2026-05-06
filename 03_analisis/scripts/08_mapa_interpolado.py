@@ -540,49 +540,52 @@ def generar_mapa_dimension_dominante(df, gdf_mun, poligono_estado,
 def generar_panel_comparativo(df, gdf_mun, poligono_estado,
                                mascara, grid_lon, grid_lat):
     """
-    fig11 — Panel 2×3 con IVS y las 4 dimensiones.
+    fig11 — Panel 2×3:
+      [IVS Coroplético] [IVS Interpolado] [Sensibilidad Social]
+      [Exposición Física] [Capacidad Adaptativa] [Grupos Vulnerables]
     """
     import geopandas as gpd
 
     print("  Generando fig11 — Panel comparativo...")
 
-    paneles = [
-        ("IVS_LOC",    "IVS Compuesto",         "RdYlGn_r"),
-        ("DIM_SS_LOC", "Sensibilidad Social",    "RdYlGn_r"),
-        ("DIM_EF_LOC", "Exposición Física",      "RdYlBu_r"),
-        ("DIM_CA_LOC", "Capacidad Adaptativa",   "RdYlGn"),
-        ("DIM_GV_LOC", "Grupos Vulnerables",     "YlOrRd"),
+    # ── Cargar IVS municipal para coroplético ─────────────────────────────────
+    df_mun = pd.read_csv(DATOS_INDICE, dtype={"CVE_MUN": str, "MUN": str})
+    df_mun["CVE_MUN"] = df_mun["CVE_MUN"].astype(str).str.zfill(3)
+    gdf_coro = gdf_mun.copy()
+
+    # Obtener columna de clave municipal del shapefile
+    if "CVEGEO" in gdf_coro.columns:
+        gdf_coro["CVE_MUN"] = gdf_coro["CVEGEO"].str[-3:]
+    elif "CVE_MUN" not in gdf_coro.columns:
+        col_cve = next((c for c in gdf_coro.columns
+                        if "CVE" in c.upper()), None)
+        if col_cve:
+            gdf_coro["CVE_MUN"] = gdf_coro[col_cve].astype(str).str[-3:]
+
+    gdf_coro = gdf_coro.merge(
+        df_mun[["CVE_MUN", "IVS", "NOM_MUN"]],
+        on="CVE_MUN", how="left"
+    )
+
+    # ── Paneles interpolados ───────────────────────────────────────────────────
+    paneles_interp = [
+        ("IVS_LOC",    "IVS Interpolado (IDW)",    "RdYlGn_r"),
+        ("DIM_SS_LOC", "Sensibilidad Social",       "RdYlGn_r"),
+        ("DIM_EF_LOC", "Exposición Física",         "RdYlBu_r"),
+        ("DIM_CA_LOC", "Capacidad Adaptativa",      "RdYlGn"),
+        ("DIM_GV_LOC", "Grupos Vulnerables",        "YlOrRd"),
     ]
 
-    fig, axes = plt.subplots(2, 3, figsize=(20, 14))
+    fig, axes = plt.subplots(2, 3, figsize=(22, 15))
     axes_flat = axes.flatten()
 
-    lons = df["LONGITUD"].values.astype(float)
-    lats = df["LATITUD"].values.astype(float)
-    bbox = gdf_mun.total_bounds
-
+    lons    = df["LONGITUD"].values.astype(float)
+    lats    = df["LATITUD"].values.astype(float)
+    bbox    = gdf_mun.total_bounds
     col_nom = next((c for c in ["NOMGEO", "NOM_MUN"]
                     if c in gdf_mun.columns), None)
 
-    for i, (col, etiqueta, cmap) in enumerate(paneles):
-        ax = axes_flat[i]
-        vals = df[col].values.astype(float)
-
-        grid_vals  = interpolar_idw(
-            lons, lats, vals, grid_lon, grid_lat,
-            potencia=IDW_POTENCIA, vecinos=IDW_VECINOS,
-        )
-        grid_masked = np.ma.masked_where(mascara, grid_vals)
-        v_validos   = grid_masked.compressed()
-        vmin = np.percentile(v_validos, 5)
-        vmax = np.percentile(v_validos, 95)
-        norma = PowerNorm(gamma=0.7, vmin=vmin, vmax=vmax)
-
-        ax.set_facecolor("#d6eaf8")
-        im = ax.pcolormesh(grid_lon, grid_lat, grid_masked,
-                           cmap=cmap, norm=norma,
-                           shading="gouraud", zorder=2)
-
+    def agregar_contornos(ax):
         gdf_mun.boundary.plot(ax=ax, linewidth=0.5,
                               edgecolor="white", alpha=0.7, zorder=3)
         gdf_estado = gpd.GeoDataFrame(
@@ -591,7 +594,7 @@ def generar_panel_comparativo(df, gdf_mun, poligono_estado,
         gdf_estado.boundary.plot(ax=ax, linewidth=1.5,
                                  edgecolor="black", zorder=4)
 
-        # Etiquetas pequeñas
+    def agregar_etiquetas(ax, fontsize=7):
         if col_nom:
             for _, row in gdf_mun.iterrows():
                 if row.geometry:
@@ -601,11 +604,67 @@ def generar_panel_comparativo(df, gdf_mun, poligono_estado,
                     ax.annotate(
                         acr, xy=(c.x, c.y),
                         ha="center", va="center",
-                        fontsize=7, color="white", fontweight="bold",
-                        zorder=6,
+                        fontsize=fontsize, color="white",
+                        fontweight="bold", zorder=6,
                         bbox=dict(boxstyle="round,pad=0.1",
                                   fc="black", alpha=0.35, ec="none")
                     )
+
+    def ajustar_ejes(ax):
+        ax.set_xlim(bbox[0] - 0.05, bbox[2] + 0.05)
+        ax.set_ylim(bbox[1] - 0.05, bbox[3] + 0.05)
+        ax.tick_params(labelsize=8)
+        ax.set_xlabel("Longitud (°)", fontsize=9)
+        ax.set_ylabel("Latitud (°)", fontsize=9)
+
+    # ── Panel 0 — Mapa coroplético municipal ──────────────────────────────────
+    ax0 = axes_flat[0]
+    ax0.set_facecolor("#d6eaf8")
+
+    gdf_coro.plot(
+        column="IVS",
+        cmap="RdYlGn_r",
+        linewidth=0.5,
+        edgecolor="white",
+        legend=True,
+        legend_kwds={
+            "label": "IVS",
+            "orientation": "horizontal",
+            "shrink": 0.7,
+            "pad": 0.04,
+        },
+        ax=ax0,
+        missing_kwds={"color": "#cccccc"},
+        zorder=2,
+    )
+    agregar_contornos(ax0)
+    agregar_etiquetas(ax0)
+    ajustar_ejes(ax0)
+    ax0.set_title("IVS por Municipio (Coroplético)",
+                  fontsize=12, fontweight="bold", pad=8)
+
+    # ── Paneles 1–5 — Mapas interpolados ──────────────────────────────────────
+    for i, (col, etiqueta, cmap) in enumerate(paneles_interp):
+        ax = axes_flat[i + 1]
+        vals = df[col].values.astype(float)
+
+        grid_vals   = interpolar_idw(
+            lons, lats, vals, grid_lon, grid_lat,
+            potencia=IDW_POTENCIA, vecinos=IDW_VECINOS,
+        )
+        grid_masked = np.ma.masked_where(mascara, grid_vals)
+        v_validos   = grid_masked.compressed()
+        vmin  = np.percentile(v_validos, 5)
+        vmax  = np.percentile(v_validos, 95)
+        norma = PowerNorm(gamma=0.7, vmin=vmin, vmax=vmax)
+
+        ax.set_facecolor("#d6eaf8")
+        im = ax.pcolormesh(grid_lon, grid_lat, grid_masked,
+                           cmap=cmap, norm=norma,
+                           shading="gouraud", zorder=2)
+
+        agregar_contornos(ax)
+        agregar_etiquetas(ax)
 
         cbar = plt.colorbar(im, ax=ax, shrink=0.7, pad=0.02)
         cbar.ax.tick_params(labelsize=8)
@@ -613,19 +672,12 @@ def generar_panel_comparativo(df, gdf_mun, poligono_estado,
         cbar.set_ticks(ticks)
         cbar.set_ticklabels([f"{v:.2f}" for v in ticks])
 
-        ax.set_xlim(bbox[0] - 0.05, bbox[2] + 0.05)
-        ax.set_ylim(bbox[1] - 0.05, bbox[3] + 0.05)
+        ajustar_ejes(ax)
         ax.set_title(etiqueta, fontsize=12, fontweight="bold", pad=8)
-        ax.tick_params(labelsize=8)
-        ax.set_xlabel("Longitud (°)", fontsize=9)
-        ax.set_ylabel("Latitud (°)", fontsize=9)
-
-    # Ocultar el sexto panel vacío
-    axes_flat[5].set_visible(False)
 
     fig.suptitle(
         "Componentes del Índice de Vulnerabilidad Socioterritorial\n"
-        "Campeche, México — Interpolación IDW (Censo 2020)",
+        "Campeche, México (2020) — Municipal y por Interpolación IDW",
         fontsize=16, fontweight="bold", y=1.01
     )
 
@@ -634,7 +686,6 @@ def generar_panel_comparativo(df, gdf_mun, poligono_estado,
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
     print(f"  Guardado: {ruta.name}")
-
 
 # =============================================================================
 # MAIN
