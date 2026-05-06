@@ -39,7 +39,9 @@ COLS_BASE = [
 ]
 
 # Columnas de variables del índice (extraídas del diccionario en config.py)
-COLS_INDICE = list(VARIABLES_INDICE.values())
+# Con el nuevo formato de VARIABLES_INDICE extraer solo los nombres de columnas
+from config import COLS_VARIABLES
+COLS_INDICE = COLS_VARIABLES
 
 # Todas las columnas que necesitamos leer
 COLS_NECESARIAS = COLS_BASE + [c for c in COLS_INDICE if c not in COLS_BASE]
