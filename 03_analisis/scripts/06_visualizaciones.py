@@ -142,8 +142,14 @@ ETIQUETAS_VARS = {
 
 # ── Paleta de colores por variable (para radar invertido) ─────────────────────
 COLORES_VARS = [
-    "#e41a1c", "#377eb8", "#4daf4a", "#984ea3",
-    "#ff7f00", "#a65628", "#f781bf", "#999999"
+    # SS (5) — rojos/naranjas
+    "#e41a1c", "#e85d04", "#f48c06", "#faa307", "#ffba08",
+    # EF (3) — azules
+    "#377eb8", "#4895ef", "#4cc9f0",
+    # CA (4) — verdes
+    "#4daf4a", "#52b788", "#74c69d", "#95d5b2",
+    # GV (4) — morados
+    "#984ea3", "#b5179e", "#c77dff", "#e0aaff",
 ]
 
 
