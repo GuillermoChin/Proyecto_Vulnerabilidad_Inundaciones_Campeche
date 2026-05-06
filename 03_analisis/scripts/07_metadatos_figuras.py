@@ -72,7 +72,7 @@ FIGURAS = [
             "municipios del estado de Campeche a partir del Censo de "
             "Población y Vivienda 2020 (INEGI) y el Índice de Marginación "
             "por Localidad 2020 (CONAPO). El IVS integra dos dimensiones: "
-            "Vulnerabilidad Social (VS, peso=0.6) y Exposición Física "
+            "Sensibilidad Social (VS, peso=0.6) y Exposición Física "
             "(EF, peso=0.4), compuestas por 8 variables normalizadas "
             "mediante el método min-max. La línea punteada indica la "
             "media del IVS para el estado."
@@ -92,17 +92,17 @@ FIGURAS = [
         "tipo":        "Figura de publicación",
         "titulo":      (
             "Comparación de las dimensiones del IVS por municipio: "
-            "Vulnerabilidad Social y Exposición Física, Campeche, México (2020)"
+            "Sensibilidad Social y Exposición Física, Campeche, México (2020)"
         ),
         "subtitulo":   (
-            "Valores normalizados de las dimensiones Vulnerabilidad Social "
-            "(DIM_VS) y Exposición Física (DIM_EF) para cada municipio. "
+            "Valores normalizados de las dimensiones Sensibilidad Social "
+            "(DIM_SS) y Exposición Física (DIM_EF) para cada municipio. "
             "Los municipios se ordenan de mayor a menor IVS."
         ),
         "descripcion": (
             "Gráfica de barras agrupadas que desagrega el IVS en sus dos "
             "dimensiones componentes para cada municipio. La Dimensión de "
-            "Vulnerabilidad Social (DIM_VS) integra indicadores de "
+            "Sensibilidad Social (DIM_SS) integra indicadores de "
             "analfabetismo, carencias de servicios básicos en vivienda y "
             "acceso a salud. La Dimensión de Exposición Física (DIM_EF) "
             "integra densidad de población, carencia de electricidad y "
@@ -112,7 +112,7 @@ FIGURAS = [
         "pie_figura":  (
             "Fuente: elaboración propia con datos del Censo de Población "
             "y Vivienda 2020 (INEGI) e IML 2020 (CONAPO). "
-            "DIM_VS = Dimensión Vulnerabilidad Social (peso 0.6); "
+            "DIM_SS = Dimensión Sensibilidad Social (peso 0.6); "
             "DIM_EF = Dimensión Exposición Física (peso 0.4). "
             "Valores en escala normalizada [0–1]."
         ),
@@ -135,7 +135,7 @@ FIGURAS = [
             "Mapa de calor (heatmap) que muestra los valores normalizados "
             "[0–1] de las 8 variables del índice para los 12 municipios de "
             "Campeche. La línea punteada vertical separa las variables de "
-            "la Dimensión de Vulnerabilidad Social (VS1–VS5, izquierda) de "
+            "la Dimensión de Sensibilidad Social (VS1–VS5, izquierda) de "
             "las variables de la Dimensión de Exposición Física (EF1–EF3, "
             "derecha). Valores cercanos a 1 (rojo intenso) indican mayor "
             "vulnerabilidad; valores cercanos a 0 (amarillo) indican menor "
@@ -221,11 +221,11 @@ FIGURAS = [
         "archivo":     "04_outputs/figuras/exp01_dispersion_vs_ef.png",
         "tipo":        "Figura exploratoria",
         "titulo":      (
-            "Relación entre las dimensiones de Vulnerabilidad Social y "
+            "Relación entre las dimensiones de Sensibilidad Social y "
             "Exposición Física del IVS, municipios de Campeche (2020)"
         ),
         "subtitulo":   (
-            "Diagrama de dispersión que muestra la relación entre DIM_VS "
+            "Diagrama de dispersión que muestra la relación entre DIM_SS "
             "y DIM_EF. La línea diagonal representa la igualdad entre "
             "ambas dimensiones."
         ),
@@ -234,11 +234,11 @@ FIGURAS = [
             "donde ambas dimensiones son consistentes (puntos cercanos "
             "a la diagonal) y municipios con perfiles asimétricos "
             "(puntos alejados de la diagonal). Los puntos sobre la "
-            "diagonal indican mayor vulnerabilidad social que física "
+            "diagonal indican mayor Sensibilidad Social que física "
             "y viceversa."
         ),
         "pie_figura":  (
-            "Fuente: elaboración propia. DIM_VS = Dimensión Vulnerabilidad "
+            "Fuente: elaboración propia. DIM_SS = Dimensión Vulnerabilidad "
             "Social; DIM_EF = Dimensión Exposición Física. "
             "Escala normalizada [0–1]. El color de cada punto indica "
             "el nivel de vulnerabilidad asignado al municipio."
