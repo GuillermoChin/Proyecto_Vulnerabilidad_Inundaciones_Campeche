@@ -176,7 +176,7 @@ def generar_ranking(df: pd.DataFrame) -> pd.DataFrame:
         print(
             f"  {int(fila['RANKING']):<4} {fila['NOM_MUN']:<30} "
             f"{fila['IVS']:>7.4f} {str(fila['NIVEL_IVS']):<12} "
-            f"{fila['DIM_VS']:>8.4f} {fila['DIM_EF']:>8.4f}"
+            f"{fila['DIM_SS']:>8.4f} {fila['DIM_EF']:>8.4f}"
         )
 
     return df
