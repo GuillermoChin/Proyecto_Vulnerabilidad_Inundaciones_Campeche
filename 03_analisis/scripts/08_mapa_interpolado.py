@@ -5,25 +5,24 @@
 # Autores:  Guillermo Adrián Chin Canché (ITESCAM)
 #           Javier Pan Barcel (UAC-EPOMEX)
 #           Katia Ruiz Canul (ITESCAM)
-# Versión:  1.0.0
+# Versión:  2.0.0
 # Fecha:    2026
 # -----------------------------------------------------------------------------
 # Descripción:
-#   Genera un mapa de superficie continua de vulnerabilidad mediante
-#   interpolación espacial IDW (Inverse Distance Weighting) a partir
-#   de los valores calculados por localidad del ITER Censo 2020.
-#
-#   El proceso es:
-#     1. Cargar ITER completo (todas las localidades, no solo municipios)
-#     2. Calcular un IVS aproximado por localidad con las variables
-#        disponibles a ese nivel
-#     3. Aplicar IDW para generar una grilla continua sobre Campeche
-#     4. Recortar la superficie al límite estatal
-#     5. Exportar el mapa como PNG de alta resolución
+#   Genera mapas de superficie continua interpolada (IDW) para:
+#     fig05 — IVS compuesto
+#     fig06 — DIM_SS Sensibilidad Social
+#     fig07 — DIM_EF Exposición Física
+#     fig08 — DIM_CA Capacidad Adaptativa
+#     fig09 — DIM_GV Grupos Vulnerables
+#     fig10 — Dimensión dominante por zona
+#     fig11 — Panel comparativo 4 dimensiones + IVS
 #
 #   Entrada:  01_datos_crudos/iter_04_cpv2020_csv/.../conjunto_de_datos_iter_04CSV20.csv
 #             01_datos_crudos/2025_1_04_MUN/2025_1_04_MUN.shp
-#   Salida:   04_outputs/mapas/fig05_mapa_interpolado.png
+#             01_datos_crudos/04_campeche/conjunto_de_datos/04l.shp
+#             01_datos_crudos/natural_earth_agua/ne_10m_land.shp
+#   Salida:   04_outputs/mapas/fig05–fig11
 # =============================================================================
 
 import sys
@@ -33,8 +32,9 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.patches as mpatches
+from matplotlib.colors import PowerNorm, ListedColormap
 from pathlib import Path
-from scipy.interpolate import griddata
 from scipy.spatial import cKDTree
 
 warnings.filterwarnings("ignore")
@@ -45,207 +45,269 @@ from config import (
     ITER_CSV,
     SHP_MUN,
     DIR_MAPAS,
+    DATOS_INDICE,
     DPI_FIGURAS,
     FORMATO_FIG,
+    PESOS_DIMENSIONES,
 )
 
 # ── Parámetros de interpolación ───────────────────────────────────────────────
-IDW_POTENCIA   = 2       # Potencia del IDW (2 es estándar)
-IDW_VECINOS    = 5       # Número de vecinos para el IDW
-GRID_RESOLUCION = 200    # Puntos por lado de la grilla (200×200)
-
-# ── Variables para IVS a nivel localidad ─────────────────────────────────────
-# Subconjunto de variables disponibles en el ITER a nivel localidad
-# (no todas las variables municipales existen a nivel localidad)
-VARS_LOCALIDAD_VS = ["P15YM_AN", "VPH_AGUAFV", "VPH_NODREN",
-                     "VPH_PISODT", "PSINDER"]
-VARS_LOCALIDAD_EF = ["POBTOT", "VPH_C_ELEC", "VPH_SNBIEN"]
-
-PESO_VS = 0.6
-PESO_EF = 0.4
+IDW_POTENCIA    = 3
+IDW_VECINOS     = 4
+GRID_RESOLUCION = 300
 
 # ── Tamaños de fuente ─────────────────────────────────────────────────────────
 FS_TITULO = 15
 FS_EJE    = 12
 FS_TICK   = 11
 
+# ── Variables para IVS a nivel localidad ─────────────────────────────────────
+VARS_LOC_SS = ["P15YM_AN", "VPH_AGUAFV", "VPH_NODREN", "VPH_PISODT", "PSINDER"]
+VARS_LOC_EF = ["POBTOT", "VPH_C_ELEC", "VPH_SNBIEN"]
+VARS_LOC_CA = ["GRAPROES", "P18YM_PB", "PDER_IMSS", "POCUPADA"]
+VARS_LOC_GV = ["P60YMAS", "POB0_14", "P3YM_HLI", "PCON_DISC"]
+
+# ── Acrónimos ─────────────────────────────────────────────────────────────────
+ACRONIMOS_MAP = {
+    "Calkiní":     "CK", "Campeche":    "CA", "Carmen":    "CR",
+    "Champotón":   "CH", "Hecelchakán": "HE", "Hopelchén": "HO",
+    "Palizada":    "PA", "Tenabo":       "TE", "Escárcega": "ES",
+    "Calakmul":    "CL", "Candelaria":   "CN", "Seybaplaya":"SY",
+}
+
+# ── Configuración de cada mapa ────────────────────────────────────────────────
+MAPAS_CONFIG = [
+    {
+        "id":      "fig05",
+        "col":     "IVS_LOC",
+        "titulo":  "Índice de Vulnerabilidad Socioterritorial (IVS)\nCampeche, México — Interpolación IDW (Censo 2020)",
+        "cmap":    "RdYlGn_r",
+        "archivo": "fig05_mapa_interpolado",
+    },
+    {
+        "id":      "fig06",
+        "col":     "DIM_SS_LOC",
+        "titulo":  "Dimensión Sensibilidad Social (DIM_SS)\nCampeche, México — Interpolación IDW (Censo 2020)",
+        "cmap":    "RdYlGn_r",
+        "archivo": "fig06_mapa_dim_ss",
+    },
+    {
+        "id":      "fig07",
+        "col":     "DIM_EF_LOC",
+        "titulo":  "Dimensión Exposición Física (DIM_EF)\nCampeche, México — Interpolación IDW (Censo 2020)",
+        "cmap":    "RdYlBu_r",
+        "archivo": "fig07_mapa_dim_ef",
+    },
+    {
+        "id":      "fig08",
+        "col":     "DIM_CA_LOC",
+        "titulo":  "Dimensión Capacidad Adaptativa (DIM_CA)\nCampeche, México — Interpolación IDW (Censo 2020)",
+        "cmap":    "RdYlGn",   # Invertido: verde=alta CA=menos vulnerable
+        "archivo": "fig08_mapa_dim_ca",
+    },
+    {
+        "id":      "fig09",
+        "col":     "DIM_GV_LOC",
+        "titulo":  "Dimensión Grupos Vulnerables (DIM_GV)\nCampeche, México — Interpolación IDW (Censo 2020)",
+        "cmap":    "YlOrRd",
+        "archivo": "fig09_mapa_dim_gv",
+    },
+]
+
 
 # =============================================================================
-# CARGA Y PREPARACIÓN DE DATOS
+# UTILIDADES GEOESPACIALES
 # =============================================================================
 
-def cargar_iter_localidades() -> pd.DataFrame:
+def cargar_geodatos():
     """
-    Carga localidades combinando:
-    - Coordenadas decimales del shapefile 04l.shp
-    - Variables socioeconómicas del ITER CSV
-    Merge por clave CVEGEO de 9 dígitos.
+    Carga y prepara todos los geodatos necesarios:
+    - Shapefile municipal reproyectado a WGS84
+    - Polígono estatal (unión de municipios)
+    - Polígono de tierra Natural Earth (excluye agua)
     """
-    try:
-        import geopandas as gpd
-    except ImportError:
-        raise ImportError("Instala geopandas: pip install geopandas")
+    import geopandas as gpd
+    from shapely.ops import unary_union
+    from shapely.geometry import box
 
-    # ── 1. Shapefile de localidades ───────────────────────────────────────────
+    print("  Cargando geodatos...")
+
+    # Municipios
+    gdf_mun = gpd.read_file(SHP_MUN)
+    if gdf_mun.crs.to_epsg() != 4326:
+        gdf_mun = gdf_mun.to_crs(epsg=4326)
+
+    # Polígono estatal
+    poligono_estado = unary_union(gdf_mun.geometry)
+
+    # Tierra Natural Earth
+    dir_agua = ITER_CSV.parents[3] / "01_datos_crudos" / "natural_earth_agua"
+    shp_land = dir_agua / "ne_10m_land.shp"
+    if shp_land.exists():
+        gdf_land = gpd.read_file(shp_land)
+        if gdf_land.crs.to_epsg() != 4326:
+            gdf_land = gdf_land.to_crs(epsg=4326)
+        bbox_camp = box(
+            gdf_mun.total_bounds[0] - 0.5,
+            gdf_mun.total_bounds[1] - 0.5,
+            gdf_mun.total_bounds[2] + 0.5,
+            gdf_mun.total_bounds[3] + 0.5,
+        )
+        land_camp    = gdf_land[gdf_land.intersects(bbox_camp)]
+        tierra_union = unary_union(land_camp.geometry)
+        poligono_estado = poligono_estado.intersection(tierra_union)
+        print("  Cuerpos de agua excluidos ✓")
+    else:
+        print("  ⚠ ne_10m_land.shp no encontrado — sin exclusión de agua")
+
+    print(f"  BBox: {gdf_mun.total_bounds}")
+    return gdf_mun, poligono_estado
+
+
+def crear_mascara(grid_lon, grid_lat, poligono):
+    """
+    Crea una máscara booleana: True = fuera del polígono (enmascarar).
+    Usa vectorización con STRtree para mayor velocidad.
+    """
+    from shapely.geometry import MultiPoint
+    import geopandas as gpd
+
+    print("  Creando máscara vectorizada...")
+    filas, cols = grid_lon.shape
+    puntos_flat = np.column_stack([grid_lon.ravel(), grid_lat.ravel()])
+
+    gdf_puntos = gpd.GeoDataFrame(
+        geometry=gpd.points_from_xy(puntos_flat[:, 0], puntos_flat[:, 1]),
+        crs="EPSG:4326"
+    )
+    dentro = gdf_puntos.within(poligono)
+    mascara = ~dentro.values.reshape(filas, cols)
+    print(f"  Celdas dentro: {dentro.sum():,} / {filas*cols:,}")
+    return mascara
+
+
+# =============================================================================
+# CARGA Y CÁLCULO DE DATOS POR LOCALIDAD
+# =============================================================================
+
+def cargar_iter_localidades():
+    """
+    Carga localidades con coordenadas WGS84 desde shapefile 04l.shp
+    y variables socioeconómicas del ITER CSV.
+    """
+    import geopandas as gpd
+
     shp_loc = ITER_CSV.parents[2] / "04_campeche" / \
               "conjunto_de_datos" / "04l.shp"
-    if not shp_loc.exists():
-        shp_loc = ITER_CSV.parents[2] / "04_campeche" / \
-                  "conjunto_de_datos" / "04sip.shp"
 
-    print(f"  Cargando shapefile de localidades: {shp_loc.name}")
+    print(f"  Cargando shapefile: {shp_loc.name}")
     try:
         gdf = gpd.read_file(shp_loc, engine="fiona", encoding="latin-1")
     except Exception:
         gdf = gpd.read_file(shp_loc)
 
-    print(f"  Columnas shapefile: {list(gdf.columns)}")
-    print(f"  CRS original: {gdf.crs}")
-
     # Reproyectar a WGS84 ANTES de extraer centroides
-    # El shapefile viene en Lambert Conformal Conic (metros)
-    if gdf.crs and gdf.crs.to_epsg() != 4326:
+    if gdf.crs.to_epsg() != 4326:
         gdf = gdf.to_crs(epsg=4326)
-        print(f"  Reproyectado a WGS84 ✓")
 
-    # Extraer coordenadas decimales del centroide (ya en grados)
     gdf["_LON"] = gdf.geometry.centroid.x
     gdf["_LAT"] = gdf.geometry.centroid.y
-
-    print(f"  Rango LON: [{gdf['_LON'].min():.4f} — {gdf['_LON'].max():.4f}]")
-    print(f"  Rango LAT: [{gdf['_LAT'].min():.4f} — {gdf['_LAT'].max():.4f}]")
-
-    # Corregir longitudes positivas
-    if gdf["_LON"].mean() > 0:
-        gdf["_LON"] = -gdf["_LON"]
-
-    # Clave de 9 dígitos
     gdf["_CLAVE"] = gdf["CVEGEO"].astype(str).str.zfill(9)
-
-    # Solo quedarnos con lo que necesitamos del shapefile
     gdf_coords = gdf[["_CLAVE", "_LON", "_LAT"]].copy()
-    print(f"  Localidades en shapefile: {len(gdf_coords):,}")
-    print(f"  Ejemplo clave shapefile: {gdf_coords['_CLAVE'].iloc[0]}")
 
-    # ── 2. ITER CSV ───────────────────────────────────────────────────────────
-    print(f"  Cargando ITER: {ITER_CSV.name}")
-    df = pd.read_csv(
-        ITER_CSV,
-        encoding="utf-8-sig",
-        dtype=str,
-        low_memory=False,
-    )
+    print(f"  Localidades shapefile: {len(gdf_coords):,}")
+
+    # ITER CSV
+    df = pd.read_csv(ITER_CSV, encoding="utf-8-sig",
+                     dtype=str, low_memory=False)
     df.columns = [c.replace("ï»¿", "").strip() for c in df.columns]
+    df = df[(df["MUN"] != "000") &
+            (~df["LOC"].isin(["0000", "000"]))].copy()
 
-    # Filtrar solo localidades
-    df = df[
-        (df["MUN"] != "000") &
-        (~df["LOC"].isin(["0000", "000"]))
-    ].copy()
-
-    # Eliminar columnas de coordenadas DMS del ITER (no son útiles)
+    # Eliminar columnas DMS del ITER
     df = df.drop(columns=[c for c in ["LONGITUD", "LATITUD", "ALTITUD"]
                            if c in df.columns])
 
-    # Construir clave de 9 dígitos
-    ent = "04"  # Campeche
-    df["_CLAVE"] = (
-        ent +
-        df["MUN"].astype(str).str.zfill(3) +
+    df["_CLAVE"] = "04" + \
+        df["MUN"].astype(str).str.zfill(3) + \
         df["LOC"].astype(str).str.zfill(4)
-    )
 
-    print(f"  Localidades en ITER: {len(df):,}")
-    print(f"  Ejemplo clave ITER: {df['_CLAVE'].iloc[0]}")
-
-    # ── 3. Merge ──────────────────────────────────────────────────────────────
+    # Merge
     df_merge = df.merge(gdf_coords, on="_CLAVE", how="inner")
 
-    print(f"  Localidades tras merge: {len(df_merge):,}")
-
-    # Convertir variables numéricas
     for col in ["POBTOT", "TVIVHAB"]:
         if col in df_merge.columns:
             df_merge[col] = pd.to_numeric(df_merge[col], errors="coerce")
 
-    # Filtrar población > 0 y coords válidas
     df_merge = df_merge[
         df_merge["POBTOT"].notna() &
         (df_merge["POBTOT"] > 0) &
-        df_merge["_LON"].notna() &
-        df_merge["_LAT"].notna()
+        df_merge["_LON"].notna()
     ].copy()
 
-    # Renombrar coordenadas para el resto del script
-    df_merge = df_merge.rename(columns={"_LON": "LONGITUD", "_LAT": "LATITUD"})
+    df_merge = df_merge.rename(
+        columns={"_LON": "LONGITUD", "_LAT": "LATITUD"}
+    )
 
-    print(f"  Localidades válidas finales: {len(df_merge):,}")
+    print(f"  Localidades válidas: {len(df_merge):,}")
     return df_merge
 
-def calcular_ivs_localidad(df: pd.DataFrame) -> pd.DataFrame:
+
+def calcular_dimensiones_localidad(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calcula un IVS aproximado para cada localidad usando las variables
-    disponibles en el ITER a nivel de localidad.
-
-    Las variables absolutas se convierten a proporciones antes de
-    normalizar, igual que en el análisis municipal.
-
-    NOTA: Este IVS por localidad es una aproximación para la
-    interpolación espacial — no es el IVS municipal oficial del estudio.
+    Calcula las 4 dimensiones e IVS a nivel localidad.
+    Variables de CA se invierten (mayor = menos vulnerable).
     """
     df = df.copy()
 
-    # Convertir variables a numérico
-    todas_vars = VARS_LOCALIDAD_VS + VARS_LOCALIDAD_EF
-    for col in todas_vars:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    # Calcular proporciones
-    vars_pob = ["P15YM_AN", "PSINDER"]
-    vars_viv = ["VPH_AGUAFV", "VPH_NODREN", "VPH_PISODT",
-                "VPH_C_ELEC", "VPH_SNBIEN"]
-
-    for col in vars_pob:
-        if col in df.columns:
-            df[f"PROP_{col}"] = (df[col] / df["POBTOT"]).clip(0, 1)
-
-    for col in vars_viv:
-        if col in df.columns:
-            df[f"PROP_{col}"] = (df[col] / df["TVIVHAB"]).clip(0, 1)
-
-    # Normalización min-max por variable
     def minmax(serie):
         mn, mx = serie.min(), serie.max()
         return pd.Series(0.5, index=serie.index) if mx == mn \
                else (serie - mn) / (mx - mn)
 
-    cols_vs, cols_ef = [], []
+    def calc_dim(vars_list, inversas=None):
+        inversas = inversas or []
+        cols = []
+        for col in vars_list:
+            if col not in df.columns:
+                continue
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+            # Proporción
+            if col in ["GRAPROES", "POBTOT"]:
+                prop = df[col].fillna(df[col].median())
+            elif col in ["P15YM_AN", "PSINDER", "P18YM_PB", "PDER_IMSS",
+                         "POCUPADA", "P60YMAS", "POB0_14",
+                         "P3YM_HLI", "PCON_DISC"]:
+                prop = (df[col] / df["POBTOT"]).clip(0, 1).fillna(0)
+            else:
+                prop = (df[col] / df["TVIVHAB"]).clip(0, 1).fillna(0)
 
-    for col in VARS_LOCALIDAD_VS:
-        prop = f"PROP_{col}" if col != "POBTOT" else col
-        if prop in df.columns:
-            norm_col = f"NORM_{col}"
-            df[norm_col] = minmax(df[prop].fillna(df[prop].median()))
-            cols_vs.append(norm_col)
+            norm_col = f"_N_{col}"
+            df[norm_col] = minmax(prop)
+            if col in inversas:
+                df[norm_col] = 1 - df[norm_col]
+            cols.append(norm_col)
+        return df[cols].mean(axis=1) if cols else pd.Series(0.5, index=df.index)
 
-    for col in VARS_LOCALIDAD_EF:
-        prop = f"PROP_{col}" if col != "POBTOT" else col
-        if prop in df.columns:
-            norm_col = f"NORM_{col}"
-            df[norm_col] = minmax(df[prop].fillna(df[prop].median()))
-            cols_ef.append(norm_col)
+    df["DIM_SS_LOC"] = calc_dim(VARS_LOC_SS)
+    df["DIM_EF_LOC"] = calc_dim(VARS_LOC_EF)
+    df["DIM_CA_LOC"] = calc_dim(
+        VARS_LOC_CA,
+        inversas=["GRAPROES", "P18YM_PB", "PDER_IMSS", "POCUPADA"]
+    )
+    df["DIM_GV_LOC"] = calc_dim(VARS_LOC_GV)
 
-    # Dimensiones e IVS
-    df["DIM_VS"] = df[cols_vs].mean(axis=1) if cols_vs else 0.5
-    df["DIM_EF"] = df[cols_ef].mean(axis=1) if cols_ef else 0.5
-    df["IVS_LOC"] = (df["DIM_VS"] * PESO_VS + df["DIM_EF"] * PESO_EF)
+    p = PESOS_DIMENSIONES
+    df["IVS_LOC"] = (
+        df["DIM_SS_LOC"] * p["SS"] +
+        df["DIM_EF_LOC"] * p["EF"] +
+        df["DIM_CA_LOC"] * p["CA"] +
+        df["DIM_GV_LOC"] * p["GV"]
+    )
 
-    print(f"  IVS por localidad calculado: {len(df)} localidades")
-    print(f"  IVS rango: [{df['IVS_LOC'].min():.3f} — "
-          f"{df['IVS_LOC'].max():.3f}]")
-    print(f"  Variables VS usadas: {len(cols_vs)} | "
-          f"Variables EF usadas: {len(cols_ef)}")
+    print(f"  IVS rango: [{df['IVS_LOC'].min():.3f}–{df['IVS_LOC'].max():.3f}]")
+    for dim in ["DIM_SS_LOC", "DIM_EF_LOC", "DIM_CA_LOC", "DIM_GV_LOC"]:
+        print(f"  {dim}: [{df[dim].min():.3f}–{df[dim].max():.3f}]")
 
     return df
 
@@ -254,201 +316,69 @@ def calcular_ivs_localidad(df: pd.DataFrame) -> pd.DataFrame:
 # INTERPOLACIÓN IDW
 # =============================================================================
 
-def interpolar_idw(puntos_x: np.ndarray,
-                   puntos_y: np.ndarray,
-                   valores:  np.ndarray,
-                   grid_x:   np.ndarray,
-                   grid_y:   np.ndarray,
-                   potencia: int = 2,
-                   vecinos:  int = 8) -> np.ndarray:
-    """
-    Interpolación IDW (Inverse Distance Weighting).
+def interpolar_idw(lons, lats, vals, grid_lon, grid_lat,
+                   potencia=3, vecinos=4):
+    """IDW con cKDTree para eficiencia."""
+    puntos  = np.column_stack([lons, lats])
+    arbol   = cKDTree(puntos)
+    grilla  = np.column_stack([grid_lon.ravel(), grid_lat.ravel()])
+    dists, idx = arbol.query(grilla, k=min(vecinos, len(puntos)))
 
-    Para cada punto de la grilla busca los K vecinos más cercanos
-    y calcula el valor como promedio ponderado por la inversa de
-    la distancia elevada a la potencia p.
+    if dists.ndim == 1:
+        dists = dists[:, np.newaxis]
+        idx   = idx[:, np.newaxis]
 
-    Fórmula:
-        z* = Σ(z_i / d_i^p) / Σ(1 / d_i^p)
+    dists  = np.where(dists == 0, 1e-10, dists)
+    pesos  = 1.0 / np.power(dists, potencia)
+    pesos /= pesos.sum(axis=1, keepdims=True)
 
-    donde d_i es la distancia al vecino i y p es la potencia.
-    """
-    # Construir árbol KD para búsqueda eficiente de vecinos
-    puntos = np.column_stack([puntos_x, puntos_y])
-    arbol  = cKDTree(puntos)
-
-    # Puntos de la grilla
-    grilla = np.column_stack([grid_x.ravel(), grid_y.ravel()])
-
-    # Buscar K vecinos más cercanos para cada punto de la grilla
-    distancias, indices = arbol.query(grilla, k=min(vecinos, len(puntos)))
-
-    # Manejar caso de un solo vecino (distancias 1D)
-    if distancias.ndim == 1:
-        distancias = distancias[:, np.newaxis]
-        indices    = indices[:, np.newaxis]
-
-    # Evitar división por cero en puntos exactamente sobre datos
-    distancias = np.where(distancias == 0, 1e-10, distancias)
-
-    # Calcular pesos IDW
-    pesos  = 1.0 / np.power(distancias, potencia)
-    pesos_norm = pesos / pesos.sum(axis=1, keepdims=True)
-
-    # Interpolación
-    vals_vecinos = valores[indices]
-    resultado    = (pesos_norm * vals_vecinos).sum(axis=1)
-
-    return resultado.reshape(grid_x.shape)
+    return (pesos * vals[idx]).sum(axis=1).reshape(grid_lon.shape)
 
 
 # =============================================================================
-# GENERACIÓN DEL MAPA
+# GENERACIÓN DE MAPA INDIVIDUAL
 # =============================================================================
 
-def generar_mapa_interpolado(df: pd.DataFrame) -> None:
-    """
-    Genera mapa interpolado IDW recortado al límite estatal de Campeche.
-    Los puntos fuera del polígono estatal se enmascaran con NaN.
-    """
+def generar_mapa(df, col, titulo, cmap, archivo,
+                 gdf_mun, poligono_estado, mascara,
+                 grid_lon, grid_lat):
+    """Genera un mapa interpolado para una variable dada."""
     import geopandas as gpd
     from shapely.ops import unary_union
-    from shapely.geometry import Point
-    import numpy as np
 
-    # ── Puntos de datos ───────────────────────────────────────────────────────
-    df_valido = df.dropna(subset=["LONGITUD", "LATITUD", "IVS_LOC"])
-    lons = df_valido["LONGITUD"].values.astype(float)
-    lats = df_valido["LATITUD"].values.astype(float)
-    ivs  = df_valido["IVS_LOC"].values.astype(float)
+    lons = df["LONGITUD"].values.astype(float)
+    lats = df["LATITUD"].values.astype(float)
+    vals = df[col].values.astype(float)
 
-    print(f"  Puntos: {len(lons):,} | IVS [{ivs.min():.3f}–{ivs.max():.3f}]")
-
-    # ── Cargar shapefile y reproyectar a WGS84 ────────────────────────────────
-    gdf_mun = gpd.read_file(SHP_MUN)
-    if gdf_mun.crs and gdf_mun.crs.to_epsg() != 4326:
-        gdf_mun = gdf_mun.to_crs(epsg=4326)
-
-    # Polígono del estado completo (unión de municipios)
-    poligono_estado = unary_union(gdf_mun.geometry)
-    # ── Intersectar con tierra firme (excluye automáticamente cuerpos de agua) ─
-    # En lugar de restar agua, usamos el polígono de tierra de Natural Earth.
-    # Esto excluye automáticamente Laguna de Términos, mar y cualquier
-    # cuerpo de agua costero o interior.
-    dir_agua  = ITER_CSV.parents[3] / "01_datos_crudos" / "natural_earth_agua"
-    shp_land  = dir_agua / "ne_10m_land.shp"
-
-    if shp_land.exists():
-        try:
-            print("  Cargando polígono de tierra Natural Earth...")
-            gdf_land = gpd.read_file(shp_land)
-            if gdf_land.crs.to_epsg() != 4326:
-                gdf_land = gdf_land.to_crs(epsg=4326)
-
-            # Recortar tierra al bbox de Campeche + margen
-            from shapely.geometry import box
-            bbox_camp = box(
-                gdf_mun.total_bounds[0] - 0.5,
-                gdf_mun.total_bounds[1] - 0.5,
-                gdf_mun.total_bounds[2] + 0.5,
-                gdf_mun.total_bounds[3] + 0.5,
-            )
-            land_camp = gdf_land[gdf_land.intersects(bbox_camp)]
-            tierra_union = unary_union(land_camp.geometry)
-
-            # Intersección: tierra ∩ estado = solo tierra dentro de Campeche
-            poligono_estado = poligono_estado.intersection(tierra_union)
-            print("  Laguna de Términos y cuerpos de agua excluidos ✓")
-        except Exception as e:
-            print(f"  ⚠ Error con ne_10m_land: {e}")
-            print("  Continuando con polígono estatal sin corrección de agua")
-    else:
-        print(f"  ⚠ ne_10m_land.shp no encontrado en {dir_agua}")
-        print("  Ejecuta descargar_datos_agua.py primero")
-    
-    bbox = gdf_mun.total_bounds  # [minx, miny, maxx, maxy]
-
-    lon_min, lat_min = bbox[0] - 0.05, bbox[1] - 0.05
-    lon_max, lat_max = bbox[2] + 0.05, bbox[3] + 0.05
-
-    print(f"  BBox estado: lon[{lon_min:.2f}–{lon_max:.2f}] "
-          f"lat[{lat_min:.2f}–{lat_max:.2f}]")
-
-    # ── Crear grilla ──────────────────────────────────────────────────────────
-    grid_lon, grid_lat = np.meshgrid(
-        np.linspace(lon_min, lon_max, GRID_RESOLUCION),
-        np.linspace(lat_min, lat_max, GRID_RESOLUCION),
+    print(f"  Interpolando {col}...")
+    grid_vals = interpolar_idw(
+        lons, lats, vals, grid_lon, grid_lat,
+        potencia=IDW_POTENCIA, vecinos=IDW_VECINOS,
     )
 
-    # ── IDW ───────────────────────────────────────────────────────────────────
-    print("  Interpolando IDW...")
-    grid_ivs = interpolar_idw(
-        lons, lats, ivs,
-        grid_lon, grid_lat,
-        potencia=IDW_POTENCIA,
-        vecinos=IDW_VECINOS,
-    )
-
-    # ── MÁSCARA — solo mostrar dentro del polígono estatal ────────────────────
-    print("  Aplicando máscara al límite estatal (esto tarda ~20s)...")
-    filas, cols = grid_lon.shape
-    mascara = np.zeros((filas, cols), dtype=bool)
-
-    for i in range(filas):
-        for j in range(cols):
-            punto = Point(grid_lon[i, j], grid_lat[i, j])
-            mascara[i, j] = not poligono_estado.contains(punto)
-
-    grid_ivs_masked = np.ma.masked_where(mascara, grid_ivs)
-    print(f"  Celdas dentro del estado: "
-          f"{(~mascara).sum():,} / {filas*cols:,}")
-
-    # ── Escala de color por percentiles del área enmascarada ──────────────────
-    valores_validos = grid_ivs_masked.compressed()
+    grid_masked = np.ma.masked_where(mascara, grid_vals)
+    valores_validos = grid_masked.compressed()
     vmin = np.percentile(valores_validos, 5)
     vmax = np.percentile(valores_validos, 95)
-    print(f"  Escala p5–p95: [{vmin:.3f}–{vmax:.3f}]")
-
-    # ── Figura ────────────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(12, 11))
-
-    # Fondo del mapa (color neutro para mar/exterior)
-    ax.set_facecolor("#d6eaf8")
-
-    # Superficie interpolada enmascarada
-    from matplotlib.colors import PowerNorm
     norma = PowerNorm(gamma=0.7, vmin=vmin, vmax=vmax)
 
-    img = ax.pcolormesh(
-        grid_lon, grid_lat, grid_ivs_masked,
-        cmap="RdYlGn_r",
-        norm=norma,
-        shading="gouraud",
-        zorder=2,
-    )
+    fig, ax = plt.subplots(figsize=(12, 11))
+    ax.set_facecolor("#d6eaf8")
 
-    # Contornos municipales
-    gdf_mun.boundary.plot(
-        ax=ax, linewidth=0.8,
-        edgecolor="white", alpha=0.8, zorder=3
-    )
+    ax.pcolormesh(grid_lon, grid_lat, grid_masked,
+                  cmap=cmap, norm=norma,
+                  shading="gouraud", zorder=2)
 
-    # Contorno estatal grueso
+    # Contornos
+    gdf_mun.boundary.plot(ax=ax, linewidth=0.8,
+                          edgecolor="white", alpha=0.8, zorder=3)
     gdf_estado = gpd.GeoDataFrame(
-        geometry=[poligono_estado], crs=gdf_mun.crs
+        geometry=[poligono_estado], crs="EPSG:4326"
     )
-    gdf_estado.boundary.plot(
-        ax=ax, linewidth=2.2,
-        edgecolor="black", zorder=4
-    )
+    gdf_estado.boundary.plot(ax=ax, linewidth=2.2,
+                             edgecolor="black", zorder=4)
 
-    # Etiquetas de municipios
-    ACRONIMOS_MAP = {
-        "Calkiní":     "CK", "Campeche":    "CA", "Carmen":    "CR",
-        "Champotón":   "CH", "Hecelchakán": "HE", "Hopelchén": "HO",
-        "Palizada":    "PA", "Tenabo":       "TE", "Escárcega": "ES",
-        "Calakmul":    "CL", "Candelaria":   "CN", "Seybaplaya":"SY",
-    }
+    # Etiquetas
     col_nom = next((c for c in ["NOMGEO", "NOM_MUN"]
                     if c in gdf_mun.columns), None)
     if col_nom:
@@ -467,55 +397,299 @@ def generar_mapa_interpolado(df: pd.DataFrame) -> None:
                 )
 
     # Puntos de localidades
-    ax.scatter(lons, lats, c="black", s=3,
-               alpha=0.3, zorder=5)
+    ax.scatter(lons, lats, c="black", s=3, alpha=0.3, zorder=5)
 
-    # Barra de color
-    cbar = plt.colorbar(img, ax=ax, shrink=0.6, pad=0.02, aspect=20)
-    cbar.set_label("Índice de Vulnerabilidad Socioterritorial (IVS)",
-                   fontsize=FS_EJE)
+    # Colorbar
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norma)
+    sm.set_array([])
+    cbar = plt.colorbar(sm, ax=ax, shrink=0.6, pad=0.02, aspect=20)
+    cbar.set_label("Valor normalizado [0–1]", fontsize=FS_EJE)
     cbar.ax.tick_params(labelsize=FS_TICK)
     ticks = np.linspace(vmin, vmax, 5)
     cbar.set_ticks(ticks)
     cbar.set_ticklabels([f"{v:.3f}" for v in ticks])
 
-    ax.set_xlim(lon_min, lon_max)
-    ax.set_ylim(lat_min, lat_max)
+    bbox = gdf_mun.total_bounds
+    ax.set_xlim(bbox[0] - 0.05, bbox[2] + 0.05)
+    ax.set_ylim(bbox[1] - 0.05, bbox[3] + 0.05)
     ax.set_xlabel("Longitud (°)", fontsize=FS_EJE)
-    ax.set_ylabel("Latitud (°)",  fontsize=FS_EJE)
+    ax.set_ylabel("Latitud (°)", fontsize=FS_EJE)
     ax.tick_params(labelsize=FS_TICK)
-    ax.set_title(
-        "Superficie continua de vulnerabilidad ante inundaciones\n"
-        "Campeche, México — Interpolación IDW (Censo 2020)",
-        fontsize=FS_TITULO, pad=14,
-    )
+    ax.set_title(titulo, fontsize=FS_TITULO, pad=14)
 
     plt.tight_layout()
-    ruta = DIR_MAPAS / f"fig05_mapa_interpolado.{FORMATO_FIG}"
-    DIR_MAPAS.mkdir(parents=True, exist_ok=True)
+    ruta = DIR_MAPAS / f"{archivo}.{FORMATO_FIG}"
     plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
     plt.close()
     print(f"  Guardado: {ruta.name}")
-    
+
+
+# =============================================================================
+# MAPA DE DIMENSIÓN DOMINANTE
+# =============================================================================
+
+def generar_mapa_dimension_dominante(df, gdf_mun, poligono_estado,
+                                     mascara, grid_lon, grid_lat):
+    """
+    fig10 — Mapa de la dimensión con mayor valor por zona.
+    Muestra qué dimensión domina la vulnerabilidad en cada punto.
+    """
+    import geopandas as gpd
+
+    print("  Generando fig10 — Dimensión dominante...")
+    dims = {
+        "SS": ("DIM_SS_LOC", "#d73027"),
+        "EF": ("DIM_EF_LOC", "#4575b4"),
+        "CA": ("DIM_CA_LOC", "#fdae61"),
+        "GV": ("DIM_GV_LOC", "#1a9641"),
+    }
+
+    lons = df["LONGITUD"].values.astype(float)
+    lats = df["LATITUD"].values.astype(float)
+
+    # Interpolar cada dimensión
+    grids = {}
+    for nombre, (col, _) in dims.items():
+        vals = df[col].values.astype(float)
+        grids[nombre] = interpolar_idw(
+            lons, lats, vals, grid_lon, grid_lat,
+            potencia=IDW_POTENCIA, vecinos=IDW_VECINOS,
+        )
+
+    # Encontrar dimensión dominante en cada celda
+    stack       = np.stack(list(grids.values()), axis=-1)
+    idx_dom     = np.argmax(stack, axis=-1)
+    nombres_dim = list(grids.keys())
+
+    # Crear mapa de colores categórico
+    colores_dims = [dims[n][1] for n in nombres_dim]
+    cmap_cat     = ListedColormap(colores_dims)
+
+    idx_masked = np.ma.masked_where(mascara, idx_dom.astype(float))
+
+    fig, ax = plt.subplots(figsize=(12, 11))
+    ax.set_facecolor("#d6eaf8")
+
+    ax.pcolormesh(grid_lon, grid_lat, idx_masked,
+                  cmap=cmap_cat, vmin=-0.5, vmax=3.5,
+                  shading="nearest", zorder=2)
+
+    # Contornos
+    gdf_mun.boundary.plot(ax=ax, linewidth=0.8,
+                          edgecolor="white", alpha=0.8, zorder=3)
+    gdf_estado = gpd.GeoDataFrame(
+        geometry=[poligono_estado], crs="EPSG:4326"
+    )
+    gdf_estado.boundary.plot(ax=ax, linewidth=2.2,
+                             edgecolor="black", zorder=4)
+
+    # Etiquetas municipios
+    col_nom = next((c for c in ["NOMGEO", "NOM_MUN"]
+                    if c in gdf_mun.columns), None)
+    if col_nom:
+        for _, row in gdf_mun.iterrows():
+            if row.geometry:
+                c   = row.geometry.centroid
+                nom = str(row[col_nom])
+                acr = ACRONIMOS_MAP.get(nom, nom[:2].upper())
+                ax.annotate(
+                    acr, xy=(c.x, c.y),
+                    ha="center", va="center",
+                    fontsize=11, color="white", fontweight="bold",
+                    zorder=6,
+                    bbox=dict(boxstyle="round,pad=0.2",
+                              fc="black", alpha=0.4, ec="none")
+                )
+
+    # Leyenda
+    etiquetas = {
+        "SS": "Sensibilidad Social",
+        "EF": "Exposición Física",
+        "CA": "Capacidad Adaptativa",
+        "GV": "Grupos Vulnerables",
+    }
+    parches = [mpatches.Patch(color=dims[n][1],
+               label=etiquetas[n]) for n in nombres_dim]
+    ax.legend(handles=parches, title="Dimensión dominante",
+              loc="lower left", fontsize=11, title_fontsize=11,
+              framealpha=0.8)
+
+    bbox = gdf_mun.total_bounds
+    ax.set_xlim(bbox[0] - 0.05, bbox[2] + 0.05)
+    ax.set_ylim(bbox[1] - 0.05, bbox[3] + 0.05)
+    ax.set_xlabel("Longitud (°)", fontsize=FS_EJE)
+    ax.set_ylabel("Latitud (°)", fontsize=FS_EJE)
+    ax.tick_params(labelsize=FS_TICK)
+    ax.set_title(
+        "Dimensión de mayor vulnerabilidad por zona\n"
+        "Campeche, México — Interpolación IDW (Censo 2020)",
+        fontsize=FS_TITULO, pad=14
+    )
+
+    plt.tight_layout()
+    ruta = DIR_MAPAS / f"fig10_mapa_dimension_dominante.{FORMATO_FIG}"
+    plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
+    plt.close()
+    print(f"  Guardado: {ruta.name}")
+
+
+# =============================================================================
+# PANEL COMPARATIVO
+# =============================================================================
+
+def generar_panel_comparativo(df, gdf_mun, poligono_estado,
+                               mascara, grid_lon, grid_lat):
+    """
+    fig11 — Panel 2×3 con IVS y las 4 dimensiones.
+    """
+    import geopandas as gpd
+
+    print("  Generando fig11 — Panel comparativo...")
+
+    paneles = [
+        ("IVS_LOC",    "IVS Compuesto",         "RdYlGn_r"),
+        ("DIM_SS_LOC", "Sensibilidad Social",    "RdYlGn_r"),
+        ("DIM_EF_LOC", "Exposición Física",      "RdYlBu_r"),
+        ("DIM_CA_LOC", "Capacidad Adaptativa",   "RdYlGn"),
+        ("DIM_GV_LOC", "Grupos Vulnerables",     "YlOrRd"),
+    ]
+
+    fig, axes = plt.subplots(2, 3, figsize=(20, 14))
+    axes_flat = axes.flatten()
+
+    lons = df["LONGITUD"].values.astype(float)
+    lats = df["LATITUD"].values.astype(float)
+    bbox = gdf_mun.total_bounds
+
+    col_nom = next((c for c in ["NOMGEO", "NOM_MUN"]
+                    if c in gdf_mun.columns), None)
+
+    for i, (col, etiqueta, cmap) in enumerate(paneles):
+        ax = axes_flat[i]
+        vals = df[col].values.astype(float)
+
+        grid_vals  = interpolar_idw(
+            lons, lats, vals, grid_lon, grid_lat,
+            potencia=IDW_POTENCIA, vecinos=IDW_VECINOS,
+        )
+        grid_masked = np.ma.masked_where(mascara, grid_vals)
+        v_validos   = grid_masked.compressed()
+        vmin = np.percentile(v_validos, 5)
+        vmax = np.percentile(v_validos, 95)
+        norma = PowerNorm(gamma=0.7, vmin=vmin, vmax=vmax)
+
+        ax.set_facecolor("#d6eaf8")
+        im = ax.pcolormesh(grid_lon, grid_lat, grid_masked,
+                           cmap=cmap, norm=norma,
+                           shading="gouraud", zorder=2)
+
+        gdf_mun.boundary.plot(ax=ax, linewidth=0.5,
+                              edgecolor="white", alpha=0.7, zorder=3)
+        gdf_estado = gpd.GeoDataFrame(
+            geometry=[poligono_estado], crs="EPSG:4326"
+        )
+        gdf_estado.boundary.plot(ax=ax, linewidth=1.5,
+                                 edgecolor="black", zorder=4)
+
+        # Etiquetas pequeñas
+        if col_nom:
+            for _, row in gdf_mun.iterrows():
+                if row.geometry:
+                    c   = row.geometry.centroid
+                    nom = str(row[col_nom])
+                    acr = ACRONIMOS_MAP.get(nom, nom[:2].upper())
+                    ax.annotate(
+                        acr, xy=(c.x, c.y),
+                        ha="center", va="center",
+                        fontsize=7, color="white", fontweight="bold",
+                        zorder=6,
+                        bbox=dict(boxstyle="round,pad=0.1",
+                                  fc="black", alpha=0.35, ec="none")
+                    )
+
+        cbar = plt.colorbar(im, ax=ax, shrink=0.7, pad=0.02)
+        cbar.ax.tick_params(labelsize=8)
+        ticks = np.linspace(vmin, vmax, 3)
+        cbar.set_ticks(ticks)
+        cbar.set_ticklabels([f"{v:.2f}" for v in ticks])
+
+        ax.set_xlim(bbox[0] - 0.05, bbox[2] + 0.05)
+        ax.set_ylim(bbox[1] - 0.05, bbox[3] + 0.05)
+        ax.set_title(etiqueta, fontsize=12, fontweight="bold", pad=8)
+        ax.tick_params(labelsize=8)
+        ax.set_xlabel("Longitud (°)", fontsize=9)
+        ax.set_ylabel("Latitud (°)", fontsize=9)
+
+    # Ocultar el sexto panel vacío
+    axes_flat[5].set_visible(False)
+
+    fig.suptitle(
+        "Componentes del Índice de Vulnerabilidad Socioterritorial\n"
+        "Campeche, México — Interpolación IDW (Censo 2020)",
+        fontsize=16, fontweight="bold", y=1.01
+    )
+
+    plt.tight_layout()
+    ruta = DIR_MAPAS / f"fig11_panel_comparativo.{FORMATO_FIG}"
+    plt.savefig(ruta, dpi=DPI_FIGURAS, bbox_inches="tight")
+    plt.close()
+    print(f"  Guardado: {ruta.name}")
+
+
 # =============================================================================
 # MAIN
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("SCRIPT 08 — Mapa de superficie interpolada (IDW)")
+    print("SCRIPT 08 — Mapas de superficie interpolada (IDW)")
     print("=" * 60)
 
-    # 1. Cargar localidades
+    DIR_MAPAS.mkdir(parents=True, exist_ok=True)
+
+    # ── 1. Geodatos ───────────────────────────────────────────────────────────
+    gdf_mun, poligono_estado = cargar_geodatos()
+    bbox = gdf_mun.total_bounds
+
+    # ── 2. Grilla común para todos los mapas ──────────────────────────────────
+    lon_min, lat_min = bbox[0] - 0.05, bbox[1] - 0.05
+    lon_max, lat_max = bbox[2] + 0.05, bbox[3] + 0.05
+
+    grid_lon, grid_lat = np.meshgrid(
+        np.linspace(lon_min, lon_max, GRID_RESOLUCION),
+        np.linspace(lat_min, lat_max, GRID_RESOLUCION),
+    )
+    print(f"  Grilla: {GRID_RESOLUCION}×{GRID_RESOLUCION}")
+
+    # ── 3. Máscara (calculada una sola vez) ───────────────────────────────────
+    mascara = crear_mascara(grid_lon, grid_lat, poligono_estado)
+
+    # ── 4. Datos por localidad ────────────────────────────────────────────────
     df = cargar_iter_localidades()
+    df = calcular_dimensiones_localidad(df)
 
-    # 2. Calcular IVS por localidad
-    df = calcular_ivs_localidad(df)
+    # ── 5. Mapas individuales fig05–fig09 ─────────────────────────────────────
+    print("\n  [Mapas individuales]")
+    for cfg in MAPAS_CONFIG:
+        generar_mapa(
+            df, cfg["col"], cfg["titulo"], cfg["cmap"], cfg["archivo"],
+            gdf_mun, poligono_estado, mascara, grid_lon, grid_lat,
+        )
 
-    # 3. Generar mapa interpolado
-    generar_mapa_interpolado(df)
+    # ── 6. Mapa dimensión dominante fig10 ─────────────────────────────────────
+    print("\n  [Mapa dimensión dominante]")
+    generar_mapa_dimension_dominante(
+        df, gdf_mun, poligono_estado, mascara, grid_lon, grid_lat
+    )
 
-    print("\n✓ Script 08 completado exitosamente\n")
+    # ── 7. Panel comparativo fig11 ────────────────────────────────────────────
+    print("\n  [Panel comparativo]")
+    generar_panel_comparativo(
+        df, gdf_mun, poligono_estado, mascara, grid_lon, grid_lat
+    )
+
+    print("\n✓ Script 08 completado exitosamente")
+    print(f"  Mapas en: {DIR_MAPAS}\n")
 
 
 if __name__ == "__main__":
