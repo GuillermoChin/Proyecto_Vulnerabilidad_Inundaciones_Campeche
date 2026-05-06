@@ -32,8 +32,10 @@ from config import (
 
 
 # ── Variables normalizadas por dimensión ──────────────────────────────────────
-VARS_VS = ["NORM_VS1", "NORM_VS2", "NORM_VS3", "NORM_VS4", "NORM_VS5"]
+VARS_SS = ["NORM_SS1", "NORM_SS2", "NORM_SS3", "NORM_SS4", "NORM_SS5"]
 VARS_EF = ["NORM_EF1", "NORM_EF2", "NORM_EF3"]
+VARS_CA = ["NORM_CA1", "NORM_CA2", "NORM_CA3", "NORM_CA4"]
+VARS_GV = ["NORM_GV1", "NORM_GV2", "NORM_GV3", "NORM_GV4"]
 
 
 def cargar_normalizado(ruta) -> pd.DataFrame:
@@ -63,65 +65,63 @@ def cargar_normalizado(ruta) -> pd.DataFrame:
 
 def calcular_dimensiones(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calcula cada dimensión como promedio simple de sus variables normalizadas.
-
-    Dimensión VS (Vulnerabilidad Social):
-        Promedio de NORM_VS1 a NORM_VS5
-
-    Dimensión EF (Exposición Física):
-        Promedio de NORM_EF1 a NORM_EF3
-
-    Si alguna variable falta se calcula con las disponibles y se reporta.
+    Calcula las 4 dimensiones como promedios simples de sus variables.
+    SS, EF, CA, GV → cada una en [0,1].
     """
-    # ── Dimensión VS ──────────────────────────────────────────────────────────
-    vars_vs_disp = [v for v in VARS_VS if v in df.columns]
-    faltantes_vs = set(VARS_VS) - set(vars_vs_disp)
-    if faltantes_vs:
-        print(f"  ⚠ Variables VS no disponibles: {faltantes_vs}")
-    df["DIM_VS"] = df[vars_vs_disp].mean(axis=1)
-    print(f"  DIM_VS calculada con {len(vars_vs_disp)} variables ✓")
+    dimensiones = {
+        "DIM_SS": VARS_SS,
+        "DIM_EF": VARS_EF,
+        "DIM_CA": VARS_CA,
+        "DIM_GV": VARS_GV,
+    }
 
-    # ── Dimensión EF ──────────────────────────────────────────────────────────
-    vars_ef_disp = [v for v in VARS_EF if v in df.columns]
-    faltantes_ef = set(VARS_EF) - set(vars_ef_disp)
-    if faltantes_ef:
-        print(f"  ⚠ Variables EF no disponibles: {faltantes_ef}")
-    df["DIM_EF"] = df[vars_ef_disp].mean(axis=1)
-    print(f"  DIM_EF calculada con {len(vars_ef_disp)} variables ✓")
+    print(f"\n  {'Municipio':<30} "
+          f"{'DIM_SS':>8} {'DIM_EF':>8} {'DIM_CA':>8} {'DIM_GV':>8}")
+    print("  " + "-" * 66)
 
-    # Reporte de dimensiones
-    print(f"\n  {'Municipio':<30} {'DIM_VS':>8} {'DIM_EF':>8}")
-    print("  " + "-" * 50)
-    for _, fila in df[["NOM_MUN", "DIM_VS", "DIM_EF"]].iterrows():
-        print(f"  {fila['NOM_MUN']:<30} {fila['DIM_VS']:>8.4f} "
-              f"{fila['DIM_EF']:>8.4f}")
+    for dim_col, vars_dim in dimensiones.items():
+        vars_disp   = [v for v in vars_dim if v in df.columns]
+        faltantes   = set(vars_dim) - set(vars_disp)
+        if faltantes:
+            print(f"  ⚠ {dim_col}: variables no disponibles: {faltantes}")
+        df[dim_col] = df[vars_disp].mean(axis=1)
+        print(f"  {dim_col} calculada con {len(vars_disp)} variables ✓")
 
+    print()
+    for _, row in df[["NOM_MUN","DIM_SS","DIM_EF",
+                       "DIM_CA","DIM_GV"]].iterrows():
+        print(
+            f"  {row['NOM_MUN']:<30} "
+            f"{row['DIM_SS']:>8.4f} {row['DIM_EF']:>8.4f} "
+            f"{row['DIM_CA']:>8.4f} {row['DIM_GV']:>8.4f}"
+        )
     return df
 
 
 def calcular_indice_compuesto(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calcula el Índice de Vulnerabilidad Socioterritorial (IVS) como
-    combinación lineal ponderada de las dos dimensiones.
-
-    Fórmula:
-        IVS = (DIM_VS × peso_VS) + (DIM_EF × peso_EF)
-
-    Los pesos están definidos en config.py:
-        VS = 0.6  |  EF = 0.4
+    IVS = DIM_SS×0.30 + DIM_EF×0.25 + DIM_CA×0.25 + DIM_GV×0.20
+    Justificación de pesos:
+      SS=0.30 — Cutter et al. (2003) Social Vulnerability Index
+      EF=0.25 — IPCC AR5 (2014) exposure component
+      CA=0.25 — IPCC AR5 (2014) adaptive capacity component
+      GV=0.20 — Wisner et al. (2004) At Risk framework
     """
-    peso_vs = PESOS_DIMENSIONES["VS"]
-    peso_ef = PESOS_DIMENSIONES["EF"]
-
-    df["IVS"] = (df["DIM_VS"] * peso_vs) + (df["DIM_EF"] * peso_ef)
+    p = PESOS_DIMENSIONES
+    df["IVS"] = (
+        df["DIM_SS"] * p["SS"] +
+        df["DIM_EF"] * p["EF"] +
+        df["DIM_CA"] * p["CA"] +
+        df["DIM_GV"] * p["GV"]
+    )
     df["IVS"] = df["IVS"].round(4)
 
-    print(f"\n  Índice compuesto (IVS) calculado:")
-    print(f"    Fórmula: IVS = DIM_VS×{peso_vs} + DIM_EF×{peso_ef}")
-    print(f"    Rango obtenido: [{df['IVS'].min():.4f} — {df['IVS'].max():.4f}]")
+    print(f"\n  Índice IVS calculado:")
+    print(f"    IVS = SS×{p['SS']} + EF×{p['EF']} + "
+          f"CA×{p['CA']} + GV×{p['GV']}")
+    print(f"    Rango: [{df['IVS'].min():.4f} — {df['IVS'].max():.4f}]")
     print(f"    Media: {df['IVS'].mean():.4f} | "
-          f"Desv. estándar: {df['IVS'].std():.4f}")
-
+          f"Desv: {df['IVS'].std():.4f}")
     return df
 
 
